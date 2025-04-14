@@ -1,5 +1,5 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-use tauri::{App, AppHandle, Manager};
+use tauri::{App, AppHandle, Manager, Emitter};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
@@ -40,13 +40,13 @@ fn improve_text(text: &str) -> String {
 
 // JSからの呼び出し用のエントリーポイント
 #[tauri::command]
-async fn process_clipboard(app_handle: AppHandle) -> Result<(), String> {
+async fn process_clipboard(app_handle: AppHandle) -> Result<(String, String), String> {
     println!("process_clipboard JSからの呼び出し");
     process_clipboard_internal(app_handle).await
 }
 
-// クリップボードから文章を取得して改善し、再度クリップボードにコピーする内部実装
-async fn process_clipboard_internal(app: AppHandle) -> Result<(), String> {
+// クリップボードから文章を取得して改善し、元のテキストと改善後のテキストを返す
+async fn process_clipboard_internal(app: AppHandle) -> Result<(String, String), String> {
     println!("process_clipboard_internal 開始");
 
     // クリップボードからテキストを取得
@@ -73,25 +73,16 @@ async fn process_clipboard_internal(app: AppHandle) -> Result<(), String> {
     let improved_text = improve_text(&clipboard_text);
     println!("テキスト変換完了");
 
-    // 改善されたテキストをクリップボードに書き込む
-    match app.clipboard().write_text(improved_text.clone()) {
-        Ok(_) => println!("クリップボードに書き込みました"),
-        Err(e) => {
-            let err_msg = format!("クリップボード書き込みエラー: {}", e);
-            println!("{}", err_msg);
-            return Err(err_msg);
-        }
-    }
-
-    println!("process_clipboard_internal 完了");
-    Ok(())
+    // 元のテキストと改善されたテキストを返す
+    println!("元テキストと改善テキストを返します");
+    Ok((clipboard_text, improved_text))
 }
 
 // アプリの初期化時にショートカットを設定
 fn setup_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     println!("ショートカット設定を開始");
 
-    // Control+N ショートカットを設定
+    // Command+Shift+I ショートカットを設定
     let handle = app.handle().clone();
 
     // ショートカットハンドラーを設定
@@ -103,8 +94,21 @@ fn setup_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
                     let handle_clone = handle.clone();
                     tauri::async_runtime::spawn(async move {
                         println!("process_clipboard 呼び出し前");
+                        let for_window = handle_clone.clone();
                         match process_clipboard_internal(handle_clone).await {
-                            Ok(_) => println!("process_clipboard 成功"),
+                            Ok((original, improved)) => {
+                                println!("process_clipboard 成功: 元テキスト長さ {}, 改善テキスト長さ {}", 
+                                         original.len(), improved.len());
+                                
+                                // ウィンドウを取得してイベントを発行（フロントエンドに通知）
+                                if let Some(window) = for_window.get_webview_window("main") {
+                                    let _ = window.emit("clipboard-processed", 
+                                                       (original, improved));
+                                    println!("イベント発行完了");
+                                } else {
+                                    eprintln!("メインウィンドウが見つかりません");
+                                }
+                            }
                             Err(e) => eprintln!("Error processing clipboard: {}", e),
                         }
                         println!("process_clipboard 呼び出し後");

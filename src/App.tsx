@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { register, unregisterAll } from '@tauri-apps/plugin-global-shortcut';
-import { readText, writeText } from '@tauri-apps/plugin-clipboard-manager';
+import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { getVersion } from '@tauri-apps/api/app';
+import { listen } from '@tauri-apps/api/event';
 import './App.css';
 
 function App() {
@@ -18,6 +19,21 @@ function App() {
       })
       .catch(console.error);
 
+    // バックエンドからのイベントをリッスン
+    const unlisten = listen('clipboard-processed', (event: any) => {
+      console.log('clipboard-processedイベント受信:', event);
+
+      const [originalText, improvedText] = event.payload as [string, string];
+
+      // 元のテキストを「元の文章」に表示
+      setInputText(originalText);
+
+      // 改善されたテキストを「改善された文章」に表示
+      setOutputText(improvedText);
+
+      setStatusMessage('テキストが変換されました');
+    });
+
     // アプリ起動時にグローバルショートカットを登録
     const registerShortcut = async () => {
       try {
@@ -25,11 +41,8 @@ function App() {
         await register('Control+N', () => {
           console.log('ショートカットが押されました: Control+N');
           setStatusMessage('ショートカットが押されました: Control+N');
-          // Rustバックエンドの関数を呼び出す必要はありません
-          // Rustバックエンドのグローバルショートカットが処理を行います
-
-          // テストのために明示的にprocess_clipboardを呼び出してみる
-          testProcessClipboard();
+          // Rustバックエンドのショートカットハンドラが処理を行い、
+          // イベントで結果が返ってくるのでここでは何もしません
         });
 
         console.log('Control+N ショートカットを登録しました');
@@ -44,8 +57,9 @@ function App() {
 
     // クリーンアップ関数
     return () => {
-      // アプリ終了時にすべてのショートカットを解除
+      // アプリ終了時にショートカットとイベントリスナーを解除
       unregisterAll().catch(console.error);
+      unlisten.then((fn) => fn()).catch(console.error);
     };
   }, []);
 
@@ -59,13 +73,14 @@ function App() {
       console.log('現在のクリップボード内容:', currentClipboardText);
 
       // Rustのprocess_clipboard関数を呼び出す
-      await invoke('process_clipboard');
-      setStatusMessage('process_clipboard関数が成功しました');
+      const [originalText, improvedText] =
+        await invoke<[string, string]>('process_clipboard');
 
-      // 成功したら、最新のクリップボードの内容を取得して表示
-      const clipboardText = await readText();
-      console.log('処理後のクリップボード内容:', clipboardText);
-      setOutputText(clipboardText || '');
+      // 元のテキストと改善されたテキストを表示
+      setInputText(originalText);
+      setOutputText(improvedText);
+
+      setStatusMessage('process_clipboard関数が成功しました');
     } catch (error) {
       console.error('process_clipboard呼び出しエラー:', error);
       setStatusMessage(`process_clipboard呼び出しエラー: ${error}`);
@@ -81,14 +96,9 @@ function App() {
         text: inputText,
       });
 
-      setStatusMessage('テキスト変換完了');
-
       // 結果を表示
       setOutputText(improved);
-
-      // 改善されたテキストをクリップボードにコピー
-      await writeText(improved);
-      setStatusMessage('テキスト変換完了＆クリップボードにコピーしました');
+      setStatusMessage('テキスト変換完了');
     } catch (error) {
       console.error(error);
       setStatusMessage(`テキスト変換エラー: ${error}`);
@@ -170,10 +180,10 @@ function App() {
       </div>
 
       <p className="instruction">
-        <b>使い方：</b> テキストを選択してから <kbd>Command+Shift+I</kbd>
-        を押すと選択中のテキストが自動的に改善されます。
+        <b>使い方：</b> テキストを選択してコピーし、<kbd>Control+N</kbd>
+        を押すと選択したテキストが変換され、画面に表示されます。
         <br />
-        改善された文章は自動的にクリップボードにコピーされます。
+        元のテキストは「元の文章」に、改善されたテキストは「改善された文章」に表示されます。
       </p>
     </div>
   );
