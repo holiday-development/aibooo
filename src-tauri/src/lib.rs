@@ -1,12 +1,16 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-use tauri::{App, AppHandle};
+use tauri::{App, AppHandle, Manager};
 use tauri_plugin_clipboard_manager::ClipboardExt;
-// 後で実装するためにコメントアウト
-// use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutManager};
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 // メール文章に変換する関数
 #[tauri::command]
 fn improve_text(text: &str) -> String {
+    println!(
+        "improve_text関数が呼び出されました: テキスト長さ {}",
+        text.len()
+    );
+
     // 簡単な例：改行を修正し、挨拶と締めくくりを追加
     let mut improved = text.trim().to_string();
 
@@ -30,44 +34,106 @@ fn improve_text(text: &str) -> String {
         improved = format!("{}\n\n何卒よろしくお願いいたします。", improved);
     }
 
+    println!("テキスト変換完了: 結果の長さ {}", improved.len());
     improved
 }
 
-// クリップボードから文章を取得して改善し、再度クリップボードにコピーする
+// JSからの呼び出し用のエントリーポイント
 #[tauri::command]
-async fn process_clipboard(app: AppHandle) -> Result<(), String> {
+async fn process_clipboard(app_handle: AppHandle) -> Result<(), String> {
+    println!("process_clipboard JSからの呼び出し");
+    process_clipboard_internal(app_handle).await
+}
+
+// クリップボードから文章を取得して改善し、再度クリップボードにコピーする内部実装
+async fn process_clipboard_internal(app: AppHandle) -> Result<(), String> {
+    println!("process_clipboard_internal 開始");
+
     // クリップボードからテキストを取得
-    let clipboard_text = app.clipboard().read_text()
-        .map_err(|e| e.to_string())?;
+    let clipboard_text = match app.clipboard().read_text() {
+        Ok(text) => {
+            if text.is_empty() {
+                println!("クリップボードが空です");
+                return Err("クリップボードが空です".to_string());
+            }
+            println!(
+                "クリップボードからテキストを取得しました: 長さ {}",
+                text.len()
+            );
+            text
+        }
+        Err(e) => {
+            let err_msg = format!("クリップボード読み取りエラー: {}", e);
+            println!("{}", err_msg);
+            return Err(err_msg);
+        }
+    };
 
     // テキストを改善
     let improved_text = improve_text(&clipboard_text);
+    println!("テキスト変換完了");
 
     // 改善されたテキストをクリップボードに書き込む
-    app.clipboard().write_text(improved_text.clone())
-        .map_err(|e| e.to_string())?;
+    match app.clipboard().write_text(improved_text.clone()) {
+        Ok(_) => println!("クリップボードに書き込みました"),
+        Err(e) => {
+            let err_msg = format!("クリップボード書き込みエラー: {}", e);
+            println!("{}", err_msg);
+            return Err(err_msg);
+        }
+    }
 
+    println!("process_clipboard_internal 完了");
     Ok(())
 }
 
-// ショートカット設定関数は後で実装
-/*
 // アプリの初期化時にショートカットを設定
 fn setup_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
-    // 後で実装
+    println!("ショートカット設定を開始");
+
+    // Control+N ショートカットを設定
+    let handle = app.handle().clone();
+
+    // ショートカットハンドラーを設定
+    app.handle().plugin(
+        tauri_plugin_global_shortcut::Builder::new()
+            .with_handler(move |_app, shortcut, event| {
+                if event.state() == ShortcutState::Pressed {
+                    println!("Shortcut triggered: {:?}", shortcut);
+                    let handle_clone = handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        println!("process_clipboard 呼び出し前");
+                        match process_clipboard_internal(handle_clone).await {
+                            Ok(_) => println!("process_clipboard 成功"),
+                            Err(e) => eprintln!("Error processing clipboard: {}", e),
+                        }
+                        println!("process_clipboard 呼び出し後");
+                    });
+                }
+            })
+            .build(),
+    )?;
+
+    // Control+N を登録
+    #[cfg(target_os = "macos")]
+    let cmd_n_shortcut = Shortcut::new(Some(Modifiers::CONTROL), Code::KeyN);
+
+    app.global_shortcut().register(cmd_n_shortcut)?;
+    println!("ショートカット登録完了");
+
     Ok(())
 }
-*/
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    println!("アプリケーション起動");
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
-        // 後で実装するためコメントアウト
-        // .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
-            // setup_shortcuts(app)?;
+            println!("セットアップ開始");
+            setup_shortcuts(app)?;
+            println!("セットアップ完了");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![improve_text, process_clipboard])
