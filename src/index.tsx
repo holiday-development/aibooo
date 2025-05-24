@@ -4,7 +4,8 @@ import { register, unregisterAll } from '@tauri-apps/plugin-global-shortcut';
 import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { getVersion } from '@tauri-apps/api/app';
 import { listen } from '@tauri-apps/api/event';
-import './App.css';
+import './index.css';
+import { Button } from '@/components/ui/button';
 
 function App() {
   const [inputText, setInputText] = useState('');
@@ -158,13 +159,14 @@ function App() {
           <button type="button" onClick={improveText}>
             変換 →
           </button>
-          <button
+          <Button
             type="button"
+            variant="outline"
             onClick={testProcessClipboard}
             className="test-button"
           >
             ショートカットテスト
-          </button>
+          </Button>
         </div>
 
         <div>
