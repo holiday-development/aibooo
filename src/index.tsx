@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PhysicalSize } from '@tauri-apps/api/window';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 
 const appWindow = getCurrentWindow();
 
@@ -145,16 +147,22 @@ function App() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center h-full p-2">
-      <div className="w-full flex items-center justify-center gap-2">
-        <Input
-          type="text"
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          placeholder="元の文章"
-          className="flex-1"
-        />
-        <Button onClick={improveText}>変換</Button>
+    <div className="flex flex-col justify-end h-screen p-2 gap-4">
+      <div className="grid w-full gap-1.5">
+        <Label htmlFor="message">改善された文章</Label>
+        <Textarea value={outputText} readOnly id="message" />
+      </div>
+      <div className="grid w-full gap-1.5">
+        <Label htmlFor="message">元の文章</Label>
+        <div className="w-full flex items-end justify-center gap-2">
+          <Textarea
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            placeholder="お疲れ様です。先日の件について、ご確認いただけますでしょうか。"
+            className="flex-1"
+          />
+          <Button onClick={improveText}>変換</Button>
+        </div>
       </div>
     </div>
   );
