@@ -6,6 +6,11 @@ import { getVersion } from '@tauri-apps/api/app';
 import { listen } from '@tauri-apps/api/event';
 import './index.css';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { PhysicalSize } from '@tauri-apps/api/window';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+
+const appWindow = getCurrentWindow();
 
 function App() {
   const [inputText, setInputText] = useState('');
@@ -99,11 +104,25 @@ function App() {
 
       // 結果を表示
       setOutputText(improved);
+      // サイズを変更
+      await resizeWindowForImprovedText(200);
       setStatusMessage('テキスト変換完了');
     } catch (error) {
       console.error(error);
       setStatusMessage(`テキスト変換エラー: ${error}`);
     }
+  }
+
+  async function resizeWindowForImprovedText(size: number) {
+    // 現在のサイズを取得
+    const currentSize = await appWindow.innerSize();
+    console.log('現在のサイズ:', currentSize);
+
+    // 高さを増加（例: 現在より200px高く）
+    await appWindow.setSize(
+      new PhysicalSize(currentSize.width, currentSize.height + size)
+    );
+    console.log('新しいサイズ:', await appWindow.innerSize());
   }
 
   // クリップボードからテキストを読み込む
@@ -126,67 +145,17 @@ function App() {
   }
 
   return (
-    <div className="container">
-      <h1>Write Better</h1>
-      <p>メール文章を改善するツール</p>
-
-      <div className="status-message">
-        {statusMessage && <p>{statusMessage}</p>}
+    <div className="flex flex-col items-center justify-center h-full p-2">
+      <div className="w-full flex items-center justify-center gap-2">
+        <Input
+          type="text"
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+          placeholder="元の文章"
+          className="flex-1"
+        />
+        <Button onClick={improveText}>変換</Button>
       </div>
-
-      <div className="row">
-        <div>
-          <h2>元の文章</h2>
-          <div className="textarea-container">
-            <textarea
-              id="input-text"
-              onChange={(e) => setInputText(e.target.value)}
-              value={inputText}
-              rows={10}
-              placeholder="ここに文章を入力してください"
-            />
-            <button
-              type="button"
-              onClick={pasteFromClipboard}
-              className="paste-button"
-            >
-              貼り付け
-            </button>
-          </div>
-        </div>
-
-        <div className="buttons">
-          <button type="button" onClick={improveText}>
-            変換 →
-          </button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={testProcessClipboard}
-            className="test-button"
-          >
-            ショートカットテスト
-          </Button>
-        </div>
-
-        <div>
-          <h2>改善された文章</h2>
-          <textarea
-            id="output-text"
-            value={outputText}
-            rows={10}
-            readOnly
-            placeholder="ここに改善された文章が表示されます"
-          />
-        </div>
-      </div>
-
-      <p className="instruction">
-        <b>使い方：</b> テキストを選択してコピーし、<kbd>Control+N</kbd>
-        を押すと選択したテキストが変換され、画面に表示されます。
-        <br />
-        元のテキストは「元の文章」に、改善されたテキストは「改善された文章」に表示されます。
-      </p>
     </div>
   );
 }
