@@ -159,7 +159,7 @@ function App() {
       <div className="flex flex-col gap-2 w-full">
         <Select>
           <SelectTrigger className="w-[180px]">
-            <SelectValue defaultValue="kousei" />
+            <SelectValue defaultValue="kousei" placeholder="校正する" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="kousei">校正する</SelectItem>
