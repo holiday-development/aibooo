@@ -147,22 +147,20 @@ function App() {
   }
 
   return (
-    <div className="flex flex-col justify-end h-screen p-2 gap-4">
-      <div className="grid w-full gap-1.5">
-        <Label htmlFor="message">改善された文章</Label>
-        <Textarea value={outputText} readOnly id="message" />
-      </div>
-      <div className="grid w-full gap-1.5">
-        <Label htmlFor="message">元の文章</Label>
-        <div className="w-full flex items-end justify-center gap-2">
-          <Textarea
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            placeholder="お疲れ様です。先日の件について、ご確認いただけますでしょうか。"
-            className="flex-1"
-          />
-          <Button onClick={improveText}>変換</Button>
-        </div>
+    <div className="flex flex-col justify-end h-screen p-6 gap-4">
+      <div className="flex gap-5 h-full">
+        <Textarea
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+          placeholder="お疲れ様です。先日の件について、ご確認いただけますでしょうか。"
+          className="flex-1 resize-none"
+        />
+        <Textarea
+          value={outputText}
+          readOnly
+          placeholder="改善された文章"
+          className="flex-1 resize-none"
+        />
       </div>
     </div>
   );
