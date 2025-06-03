@@ -13,8 +13,8 @@
     "windows": [
       {
         "title": "Write Better",
-        "width": 600,
-        "height": 240,
+        "width": 672,
+        "height": 416,
         "resizable": false,
         "alwaysOnTop": true,
         "maximized": false
