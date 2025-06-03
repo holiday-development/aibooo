@@ -11,6 +11,14 @@ import { PhysicalSize } from '@tauri-apps/api/window';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { RefreshCcw } from 'lucide-react';
 
 const appWindow = getCurrentWindow();
 
@@ -147,18 +155,35 @@ function App() {
   }
 
   return (
-    <div className="flex flex-col justify-end h-screen p-6 gap-4">
-      <div className="flex gap-5 h-full">
+    <div className="flex gap-5 h-screen p-6 w-full">
+      <div className="flex flex-col gap-2 w-full">
+        <Select>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue defaultValue="kousei" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="kousei">校正する</SelectItem>
+            <SelectItem value="summarize">要約する</SelectItem>
+            <SelectItem value="translate">翻訳する</SelectItem>
+            <SelectItem value="soften">優しくする</SelectItem>
+          </SelectContent>
+        </Select>
         <Textarea
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           placeholder="お疲れ様です。先日の件について、ご確認いただけますでしょうか。"
           className="flex-1 resize-none"
         />
+      </div>
+      <div className="flex flex-col gap-2 w-full items-start">
+        <Button variant="ghost" className="flex items-center gap-2">
+          <RefreshCcw className="size-4" />
+          Command + Enter to Regenerate
+        </Button>
         <Textarea
           value={outputText}
           readOnly
-          placeholder="改善された文章"
+          placeholder="Improvement"
           className="flex-1 resize-none"
         />
       </div>
