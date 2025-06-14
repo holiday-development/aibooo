@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { register, unregisterAll } from '@tauri-apps/plugin-global-shortcut';
-import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { listen } from '@tauri-apps/api/event';
 import './index.css';
 import { Button } from '@/components/ui/button';
@@ -51,28 +50,8 @@ function App() {
     };
   }, []);
 
-  // テスト用：明示的にprocess_clipboardを呼び出す
-  async function testProcessClipboard() {
-    try {
-      // まずクリップボードの内容を確認
-      const currentClipboardText = await readText();
-      console.log('現在のクリップボード内容:', currentClipboardText);
-
-      // Rustのprocess_clipboard関数を呼び出す
-      const [originalText, improvedText] =
-        await invoke<[string, string]>('process_clipboard');
-
-      // 元のテキストと改善されたテキストを表示
-      setInputText(originalText);
-      setOutputText(improvedText);
-    } catch (error) {
-      console.error('process_clipboard呼び出しエラー:', error);
-    }
-  }
-
   async function improveText() {
     try {
-      // テキストを改善
       const improved = await invoke<string>('improve_text', {
         text: inputText,
       });
@@ -80,24 +59,7 @@ function App() {
       // 結果を表示
       setOutputText(improved);
     } catch (error) {
-      console.error(error);
-    }
-  }
-
-  // クリップボードからテキストを読み込む
-  async function pasteFromClipboard() {
-    try {
-      const text = await readText();
-      if (text) {
-        setInputText(text);
-      } else {
-        setGlobalErrorMessage(
-          'クリップボードが空か、テキストが含まれていません'
-        );
-      }
-    } catch (error) {
-      console.error('クリップボード読み取りエラー:', error);
-      setGlobalErrorMessage(`クリップボード読み取りエラー: ${error}`);
+      setGlobalErrorMessage('テキスト変換に失敗しました');
     }
   }
 
