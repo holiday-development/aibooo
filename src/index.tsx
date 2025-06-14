@@ -23,52 +23,28 @@ function App() {
   const [statusMessage, setStatusMessage] = useState("");
 
   useEffect(() => {
-    // バージョン情報を取得
-    getVersion()
-      .then((version) => {
-        console.log("Tauriバージョン:", version);
-      })
-      .catch(console.error);
-
-    // バックエンドからのイベントをリッスン
     const unlisten = listen("clipboard-processed", (event: any) => {
-      console.log("clipboard-processedイベント受信:", event);
-
       const [originalText, improvedText] = event.payload as [string, string];
-
-      // 元のテキストを「元の文章」に表示
       setInputText(originalText);
-
-      // 改善されたテキストを「改善された文章」に表示
       setOutputText(improvedText);
-
       setStatusMessage("テキストが変換されました");
     });
 
-    // アプリ起動時にグローバルショートカットを登録
     const registerShortcut = async () => {
       try {
-        // Control+N ショートカットを登録
         await register("Control+N", () => {
-          console.log("ショートカットが押されました: Control+N");
           setStatusMessage("ショートカットが押されました: Control+N");
-          // Rustバックエンドのショートカットハンドラが処理を行い、
-          // イベントで結果が返ってくるのでここでは何もしません
         });
 
-        console.log("Control+N ショートカットを登録しました");
         setStatusMessage("Control+N ショートカットを登録しました");
       } catch (error) {
-        console.error("ショートカット登録エラー:", error);
         setStatusMessage(`ショートカット登録エラー: ${error}`);
       }
     };
 
     registerShortcut();
 
-    // クリーンアップ関数
     return () => {
-      // アプリ終了時にショートカットとイベントリスナーを解除
       unregisterAll().catch(console.error);
       unlisten.then((fn) => fn()).catch(console.error);
     };
