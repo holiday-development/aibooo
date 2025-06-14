@@ -1,41 +1,91 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-use tauri::{App, AppHandle, Manager, Emitter};
+use chrono::Local;
+use dotenv;
+use std::env;
+use tauri::{App, AppHandle, Emitter, Manager};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+use tauri_plugin_store::StoreExt;
 
-// メール文章に変換する関数
+// 校正APIを呼び出して文章を改善する関数
 #[tauri::command]
-fn improve_text(text: &str) -> String {
+async fn improve_text(text: &str, app_handle: tauri::AppHandle) -> Result<String, String> {
+    // 利用回数制限のためのストア取得
+    let store = app_handle.store("usage.json").map_err(|e| {
+        serde_json::json!({"type": "store_error", "message": e.to_string()}).to_string()
+    })?;
+    let today = Local::now().format("%Y-%m-%d").to_string();
+    let mut request_count = store
+        .get("request_count")
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default();
+    let count = request_count
+        .get(&today)
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+    if count >= 5 {
+        return Err(serde_json::json!({
+            "type": "limit_exceeded",
+            "message": "本日の利用回数上限（5回）に達しました"
+        })
+        .to_string());
+    }
+    request_count.insert(today.clone(), serde_json::json!(count + 1));
+    store.set("request_count", serde_json::json!(request_count));
+    store.save().map_err(|e| {
+        serde_json::json!({"type": "store_error", "message": e.to_string()}).to_string()
+    })?;
+
     println!(
         "improve_text関数が呼び出されました: テキスト長さ {}",
         text.len()
     );
 
-    // 簡単な例：改行を修正し、挨拶と締めくくりを追加
-    let mut improved = text.trim().to_string();
+    let client = reqwest::Client::new();
+    // .envや環境変数からURLを取得
+    let url = env::var("API_URL").map_err(|_| serde_json::json!({"type": "env_error", "message": "API_URL環境変数が設定されていません"}).to_string())?;
 
-    // 余分な改行を削除
-    improved = improved.replace("\n\n\n", "\n\n");
+    let mut map: std::collections::HashMap<&'static str, &str> = std::collections::HashMap::new();
+    // TODO: 受け取ったタイプで、叩くエンドポイントを変える
+    let prompt = format!("次の文章を校正してください: {}", text);
+    map.insert("prompt", &prompt);
 
-    // 段落の間に適切な改行を入れる
-    if !improved.contains("\n\n") && improved.contains("\n") {
-        improved = improved.replace("\n", "\n\n");
+    let res = client
+        .post(url)
+        .json(&map)
+        .send()
+        .await
+        .map_err(|e| serde_json::json!({"type": "http_error", "message": format!("HTTPリクエストエラー: {}", e)}).to_string())?;
+
+    let status = res.status();
+    let body = res
+        .text()
+        .await
+        .map_err(|e| format!("レスポンス読み取りエラー: {}", e))?;
+
+    if !status.is_success() {
+        println!("APIエラー: {} {}", status, body);
+        return Err(serde_json::json!({
+            "type": "api_error",
+            "message": format!("APIエラー: {} {}", status, body)
+        })
+        .to_string());
     }
 
-    // 文章が短すぎる場合、簡単な挨拶を追加
-    if !improved.starts_with("お世話") && !improved.starts_with("いつも") {
-        improved = format!("お世話になっております。\n\n{}", improved);
+    // JSONとしてパースし、generatedTextキーの値を返す
+    let json: serde_json::Value =
+        serde_json::from_str(&body).map_err(|e| serde_json::json!({"type": "parse_error", "message": format!("JSONパースエラー: {}", e)}).to_string())?;
+    if let Some(generated) = json.get("generatedText").and_then(|v| v.as_str()) {
+        println!("APIレスポンス受信: {}", generated.len());
+        Ok(generated.to_string())
+    } else {
+        println!("APIレスポンスにgeneratedTextがありません: {}", body);
+        Err(serde_json::json!({
+            "type": "api_error",
+            "message": "APIレスポンスにgeneratedTextがありません"
+        })
+        .to_string())
     }
-
-    // 締めくくりがない場合は追加
-    if !improved.ends_with("よろしくお願いいたします。")
-        && !improved.ends_with("よろしくお願いします。")
-    {
-        improved = format!("{}\n\n何卒よろしくお願いいたします。", improved);
-    }
-
-    println!("テキスト変換完了: 結果の長さ {}", improved.len());
-    improved
 }
 
 // JSからの呼び出し用のエントリーポイント
@@ -70,7 +120,13 @@ async fn process_clipboard_internal(app: AppHandle) -> Result<(String, String), 
     };
 
     // テキストを改善
-    let improved_text = improve_text(&clipboard_text);
+    let improved_text = match improve_text(&clipboard_text, app.clone()).await {
+        Ok(text) => text,
+        Err(e) => {
+            println!("校正APIエラー: {}", e);
+            return Err(e);
+        }
+    };
     println!("テキスト変換完了");
 
     // 元のテキストと改善されたテキストを返す
@@ -95,19 +151,21 @@ fn setup_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
                     tauri::async_runtime::spawn(async move {
                         println!("process_clipboard 呼び出し前");
                         let for_window = handle_clone.clone();
+                        // ウィンドウを取得して最初に表示・フォーカス
+                        if let Some(window) = for_window.get_webview_window("main") {
+                            let _ = window.unminimize();
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        } else {
+                            eprintln!("メインウィンドウが見つかりません");
+                        }
+                        // その後API処理
                         match process_clipboard_internal(handle_clone).await {
                             Ok((original, improved)) => {
                                 println!("process_clipboard 成功: 元テキスト長さ {}, 改善テキスト長さ {}", 
                                          original.len(), improved.len());
-                                
-                                // ウィンドウを取得してイベントを発行（フロントエンドに通知）
                                 if let Some(window) = for_window.get_webview_window("main") {
-                                    // ウィンドウを最前面に表示し、フォーカスする
-                                    let _ = window.unminimize();
-                                    let _ = window.show();
-                                    let _ = window.set_focus();
-                                    let _ = window.emit("clipboard-processed", 
-                                                       (original, improved));
+                                    let _ = window.emit("clipboard-processed", original);
                                     println!("イベント発行完了");
                                 } else {
                                     eprintln!("メインウィンドウが見つかりません");
@@ -134,10 +192,12 @@ fn setup_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    dotenv::dotenv().ok();
     println!("アプリケーション起動");
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_store::Builder::default().build())
         .setup(|app| {
             println!("セットアップ開始");
             setup_shortcuts(app)?;

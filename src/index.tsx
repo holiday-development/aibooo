@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { register, unregisterAll } from '@tauri-apps/plugin-global-shortcut';
+import { unregisterAll } from '@tauri-apps/plugin-global-shortcut';
 import { listen } from '@tauri-apps/api/event';
 import './index.css';
 import { Button } from '@/components/ui/button';
@@ -21,28 +21,41 @@ const MAX_LENGTH = 5000;
 function App() {
   const [inputText, setInputText] = useState('');
   const [outputText, setOutputText] = useState('');
-  const [globalErrorMessage, setGlobalErrorMessage] = useState('');
   const isOverflow = inputText.length > MAX_LENGTH;
   const isDisabledImproveTextButton = isOverflow || inputText.length === 0;
-
-  useEffect(() => {
-    if (globalErrorMessage) {
-      toast.error(globalErrorMessage);
-    }
-  }, [globalErrorMessage]);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     const unlisten = listen('clipboard-processed', (event: any) => {
-      const [originalText, improvedText] = event.payload as [string, string];
+      // TODO: Clidentg側でClipboardの内容を取得して、それをセットする
+      const originalText = event.payload as string;
       setInputText(originalText);
-      setOutputText(improvedText);
+      setIsProcessing(true);
+      invoke<string>('improve_text', { text: originalText })
+        .then(setOutputText)
+        .catch((error) => {
+          let type = '';
+          let message = '';
+          if (typeof error === 'string') {
+            try {
+              const errObj = JSON.parse(error);
+              type = errObj.type;
+              message = errObj.message;
+            } catch {
+              // fallback: errorがJSONでなければそのまま
+              message = error;
+            }
+          }
+          if (type === 'limit_exceeded') {
+            toast.error('本日の利用回数上限（5回）に達しました');
+          } else if (message) {
+            toast.error(message);
+          } else {
+            toast.error('テキスト変換に失敗しました');
+          }
+        })
+        .finally(() => setIsProcessing(false));
     });
-
-    const registerShortcut = async () => {
-      await register('Control+N', () => {});
-    };
-
-    registerShortcut();
 
     return () => {
       unregisterAll().catch(console.error);
@@ -52,6 +65,7 @@ function App() {
 
   async function improveText() {
     try {
+      setIsProcessing(true);
       const improved = await invoke<string>('improve_text', {
         text: inputText,
       });
@@ -59,7 +73,26 @@ function App() {
       // 結果を表示
       setOutputText(improved);
     } catch (error) {
-      setGlobalErrorMessage('テキスト変換に失敗しました');
+      let type = '';
+      let message = '';
+      if (typeof error === 'string') {
+        try {
+          const errObj = JSON.parse(error);
+          type = errObj.type;
+          message = errObj.message;
+        } catch {
+          message = error;
+        }
+      }
+      if (type === 'limit_exceeded') {
+        toast.error('本日の利用回数上限（5回）に達しました');
+      } else if (message) {
+        toast.error(message);
+      } else {
+        toast.error('テキスト変換に失敗しました');
+      }
+    } finally {
+      setIsProcessing(false);
     }
   }
 
@@ -92,8 +125,12 @@ function App() {
           disabled={isDisabledImproveTextButton}
           className="flex items-center gap-2"
         >
-          <RefreshCcw className="size-4" />
-          変換する
+          {isProcessing ? (
+            <RefreshCcw className="size-4 animate-spin" />
+          ) : (
+            <RefreshCcw className="size-4" />
+          )}
+          {isProcessing ? '変換中...' : '変換する'}
         </Button>
         <ClipboardTextarea
           copyable={true}
