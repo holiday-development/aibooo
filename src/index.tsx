@@ -1,42 +1,42 @@
-import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { register, unregisterAll } from "@tauri-apps/plugin-global-shortcut";
-import { readText } from "@tauri-apps/plugin-clipboard-manager";
-import { getVersion } from "@tauri-apps/api/app";
-import { listen } from "@tauri-apps/api/event";
-import "./index.css";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { useState, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { register, unregisterAll } from '@tauri-apps/plugin-global-shortcut';
+import { readText } from '@tauri-apps/plugin-clipboard-manager';
+import { getVersion } from '@tauri-apps/api/app';
+import { listen } from '@tauri-apps/api/event';
+import './index.css';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { RefreshCcw } from "lucide-react";
-import { ClipboardTextarea } from "./components/ui/clipboard-textarea";
+} from '@/components/ui/select';
+import { RefreshCcw } from 'lucide-react';
+import { ClipboardTextarea } from './components/ui/clipboard-textarea';
 
 function App() {
-  const [inputText, setInputText] = useState("");
-  const [outputText, setOutputText] = useState("");
-  const [statusMessage, setStatusMessage] = useState("");
+  const [inputText, setInputText] = useState('');
+  const [outputText, setOutputText] = useState('');
+  const [statusMessage, setStatusMessage] = useState('');
 
   useEffect(() => {
-    const unlisten = listen("clipboard-processed", (event: any) => {
+    const unlisten = listen('clipboard-processed', (event: any) => {
       const [originalText, improvedText] = event.payload as [string, string];
       setInputText(originalText);
       setOutputText(improvedText);
-      setStatusMessage("テキストが変換されました");
+      setStatusMessage('テキストが変換されました');
     });
 
     const registerShortcut = async () => {
       try {
-        await register("Control+N", () => {
-          setStatusMessage("ショートカットが押されました: Control+N");
+        await register('Control+N', () => {
+          setStatusMessage('ショートカットが押されました: Control+N');
         });
 
-        setStatusMessage("Control+N ショートカットを登録しました");
+        setStatusMessage('Control+N ショートカットを登録しました');
       } catch (error) {
         setStatusMessage(`ショートカット登録エラー: ${error}`);
       }
@@ -53,41 +53,40 @@ function App() {
   // テスト用：明示的にprocess_clipboardを呼び出す
   async function testProcessClipboard() {
     try {
-      setStatusMessage("process_clipboard関数を呼び出します...");
+      setStatusMessage('process_clipboard関数を呼び出します...');
 
       // まずクリップボードの内容を確認
       const currentClipboardText = await readText();
-      console.log("現在のクリップボード内容:", currentClipboardText);
+      console.log('現在のクリップボード内容:', currentClipboardText);
 
       // Rustのprocess_clipboard関数を呼び出す
-      const [originalText, improvedText] = await invoke<[string, string]>(
-        "process_clipboard"
-      );
+      const [originalText, improvedText] =
+        await invoke<[string, string]>('process_clipboard');
 
       // 元のテキストと改善されたテキストを表示
       setInputText(originalText);
       setOutputText(improvedText);
 
-      setStatusMessage("process_clipboard関数が成功しました");
+      setStatusMessage('process_clipboard関数が成功しました');
     } catch (error) {
-      console.error("process_clipboard呼び出しエラー:", error);
+      console.error('process_clipboard呼び出しエラー:', error);
       setStatusMessage(`process_clipboard呼び出しエラー: ${error}`);
     }
   }
 
   async function improveText() {
     try {
-      setStatusMessage("テキスト変換中...");
+      setStatusMessage('テキスト変換中...');
 
       // テキストを改善
-      const improved = await invoke<string>("improve_text", {
+      const improved = await invoke<string>('improve_text', {
         text: inputText,
       });
 
       // 結果を表示
       setOutputText(improved);
       // サイズを変更
-      setStatusMessage("テキスト変換完了");
+      setStatusMessage('テキスト変換完了');
     } catch (error) {
       console.error(error);
       setStatusMessage(`テキスト変換エラー: ${error}`);
@@ -97,7 +96,7 @@ function App() {
   // クリップボードからテキストを読み込む
   async function pasteFromClipboard() {
     try {
-      setStatusMessage("クリップボードから読み込み中...");
+      setStatusMessage('クリップボードから読み込み中...');
       const text = await readText();
       if (text) {
         setInputText(text);
@@ -105,10 +104,10 @@ function App() {
           `クリップボードからテキストを読み込みました (${text.length} 文字)`
         );
       } else {
-        setStatusMessage("クリップボードが空か、テキストが含まれていません");
+        setStatusMessage('クリップボードが空か、テキストが含まれていません');
       }
     } catch (error) {
-      console.error("クリップボード読み取りエラー:", error);
+      console.error('クリップボード読み取りエラー:', error);
       setStatusMessage(`クリップボード読み取りエラー: ${error}`);
     }
   }
@@ -142,7 +141,7 @@ function App() {
           className="flex items-center gap-2"
         >
           <RefreshCcw className="size-4" />
-          Regenerate
+          変換する
         </Button>
         <ClipboardTextarea
           copyable={true}
