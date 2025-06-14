@@ -15,34 +15,37 @@ import {
 import { RefreshCcw } from 'lucide-react';
 import { ClipboardTextarea } from './components/ui/clipboard-textarea';
 import { MaxLengthTextarea } from '@/components/ui/max-length-textarea';
+import { toast } from 'sonner';
 
 const MAX_LENGTH = 5000;
 
 function App() {
   const [inputText, setInputText] = useState('');
   const [outputText, setOutputText] = useState('');
-  const [statusMessage, setStatusMessage] = useState('');
+  const [globalErrorMessage, setGlobalErrorMessage] = useState('');
   const isOverflow = inputText.length > MAX_LENGTH;
   const isDisabledImproveTextButton = isOverflow || inputText.length === 0;
+
+  // useEffect(() => {
+  //   if (globalErrorMessage) {
+  //     toast.error(globalErrorMessage);
+  //   }
+  // }, [globalErrorMessage]);
+
+  //テスト用
+  useEffect(() => {
+    toast.error(inputText);
+  }, [inputText, globalErrorMessage]);
 
   useEffect(() => {
     const unlisten = listen('clipboard-processed', (event: any) => {
       const [originalText, improvedText] = event.payload as [string, string];
       setInputText(originalText);
       setOutputText(improvedText);
-      setStatusMessage('テキストが変換されました');
     });
 
     const registerShortcut = async () => {
-      try {
-        await register('Control+N', () => {
-          setStatusMessage('ショートカットが押されました: Control+N');
-        });
-
-        setStatusMessage('Control+N ショートカットを登録しました');
-      } catch (error) {
-        setStatusMessage(`ショートカット登録エラー: ${error}`);
-      }
+      await register('Control+N', () => {});
     };
 
     registerShortcut();
@@ -56,8 +59,6 @@ function App() {
   // テスト用：明示的にprocess_clipboardを呼び出す
   async function testProcessClipboard() {
     try {
-      setStatusMessage('process_clipboard関数を呼び出します...');
-
       // まずクリップボードの内容を確認
       const currentClipboardText = await readText();
       console.log('現在のクリップボード内容:', currentClipboardText);
@@ -69,18 +70,13 @@ function App() {
       // 元のテキストと改善されたテキストを表示
       setInputText(originalText);
       setOutputText(improvedText);
-
-      setStatusMessage('process_clipboard関数が成功しました');
     } catch (error) {
       console.error('process_clipboard呼び出しエラー:', error);
-      setStatusMessage(`process_clipboard呼び出しエラー: ${error}`);
     }
   }
 
   async function improveText() {
     try {
-      setStatusMessage('テキスト変換中...');
-
       // テキストを改善
       const improved = await invoke<string>('improve_text', {
         text: inputText,
@@ -88,30 +84,25 @@ function App() {
 
       // 結果を表示
       setOutputText(improved);
-      // サイズを変更
-      setStatusMessage('テキスト変換完了');
     } catch (error) {
       console.error(error);
-      setStatusMessage(`テキスト変換エラー: ${error}`);
     }
   }
 
   // クリップボードからテキストを読み込む
   async function pasteFromClipboard() {
     try {
-      setStatusMessage('クリップボードから読み込み中...');
       const text = await readText();
       if (text) {
         setInputText(text);
-        setStatusMessage(
-          `クリップボードからテキストを読み込みました (${text.length} 文字)`
-        );
       } else {
-        setStatusMessage('クリップボードが空か、テキストが含まれていません');
+        setGlobalErrorMessage(
+          'クリップボードが空か、テキストが含まれていません'
+        );
       }
     } catch (error) {
       console.error('クリップボード読み取りエラー:', error);
-      setStatusMessage(`クリップボード読み取りエラー: ${error}`);
+      setGlobalErrorMessage(`クリップボード読み取りエラー: ${error}`);
     }
   }
 
