@@ -26,16 +26,11 @@ function App() {
   const isOverflow = inputText.length > MAX_LENGTH;
   const isDisabledImproveTextButton = isOverflow || inputText.length === 0;
 
-  // useEffect(() => {
-  //   if (globalErrorMessage) {
-  //     toast.error(globalErrorMessage);
-  //   }
-  // }, [globalErrorMessage]);
-
-  //テスト用
   useEffect(() => {
-    toast.error(inputText);
-  }, [inputText, globalErrorMessage]);
+    if (globalErrorMessage) {
+      toast.error(globalErrorMessage);
+    }
+  }, [globalErrorMessage]);
 
   useEffect(() => {
     const unlisten = listen('clipboard-processed', (event: any) => {
