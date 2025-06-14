@@ -27,6 +27,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "aibooo"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "dotenv",
+ "reqwest 0.11.27",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-clipboard-manager",
+ "tauri-plugin-global-shortcut",
+ "tauri-plugin-opener",
+ "tauri-plugin-store",
+ "tokio",
+]
+
+[[package]]
 name = "alloc-no-stdlib"
 version = "2.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5654,24 +5672,6 @@ dependencies = [
  "wayland-client",
  "wayland-protocols",
  "wayland-protocols-wlr",
-]
-
-[[package]]
-name = "write-better"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "dotenv",
- "reqwest 0.11.27",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-clipboard-manager",
- "tauri-plugin-global-shortcut",
- "tauri-plugin-opener",
- "tauri-plugin-store",
- "tokio",
 ]
 
 [[package]]
