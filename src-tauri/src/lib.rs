@@ -1,14 +1,17 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-use tauri::{App, AppHandle, Manager, Emitter};
+use dotenv;
+use std::env;
+use tauri::{App, AppHandle, Emitter, Manager};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
-use std::env;
-use dotenv;
 
 // 校正APIを呼び出して文章を改善する関数
 #[tauri::command]
 async fn improve_text(text: &str) -> Result<String, String> {
-    println!("improve_text関数が呼び出されました: テキスト長さ {}", text.len());
+    println!(
+        "improve_text関数が呼び出されました: テキスト長さ {}",
+        text.len()
+    );
 
     let client = reqwest::Client::new();
     // .envや環境変数からURLを取得
@@ -27,7 +30,10 @@ async fn improve_text(text: &str) -> Result<String, String> {
         .map_err(|e| format!("HTTPリクエストエラー: {}", e))?;
 
     let status = res.status();
-    let body = res.text().await.map_err(|e| format!("レスポンス読み取りエラー: {}", e))?;
+    let body = res
+        .text()
+        .await
+        .map_err(|e| format!("レスポンス読み取りエラー: {}", e))?;
 
     if !status.is_success() {
         println!("APIエラー: {} {}", status, body);
@@ -35,8 +41,8 @@ async fn improve_text(text: &str) -> Result<String, String> {
     }
 
     // JSONとしてパースし、generatedTextキーの値を返す
-    let json: serde_json::Value = serde_json::from_str(&body)
-        .map_err(|e| format!("JSONパースエラー: {}", e))?;
+    let json: serde_json::Value =
+        serde_json::from_str(&body).map_err(|e| format!("JSONパースエラー: {}", e))?;
     if let Some(generated) = json.get("generatedText").and_then(|v| v.as_str()) {
         println!("APIレスポンス受信: {}", generated.len());
         Ok(generated.to_string())
@@ -109,19 +115,21 @@ fn setup_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
                     tauri::async_runtime::spawn(async move {
                         println!("process_clipboard 呼び出し前");
                         let for_window = handle_clone.clone();
+                        // ウィンドウを取得して最初に表示・フォーカス
+                        if let Some(window) = for_window.get_webview_window("main") {
+                            let _ = window.unminimize();
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        } else {
+                            eprintln!("メインウィンドウが見つかりません");
+                        }
+                        // その後API処理
                         match process_clipboard_internal(handle_clone).await {
                             Ok((original, improved)) => {
                                 println!("process_clipboard 成功: 元テキスト長さ {}, 改善テキスト長さ {}", 
                                          original.len(), improved.len());
-                                
-                                // ウィンドウを取得してイベントを発行（フロントエンドに通知）
                                 if let Some(window) = for_window.get_webview_window("main") {
-                                    // ウィンドウを最前面に表示し、フォーカスする
-                                    let _ = window.unminimize();
-                                    let _ = window.show();
-                                    let _ = window.set_focus();
-                                    let _ = window.emit("clipboard-processed", 
-                                                       (original, improved));
+                                    let _ = window.emit("clipboard-processed", original);
                                     println!("イベント発行完了");
                                 } else {
                                     eprintln!("メインウィンドウが見つかりません");
