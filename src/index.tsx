@@ -2,11 +2,9 @@ import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { register, unregisterAll } from '@tauri-apps/plugin-global-shortcut';
 import { readText } from '@tauri-apps/plugin-clipboard-manager';
-import { getVersion } from '@tauri-apps/api/app';
 import { listen } from '@tauri-apps/api/event';
 import './index.css';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -16,11 +14,16 @@ import {
 } from '@/components/ui/select';
 import { RefreshCcw } from 'lucide-react';
 import { ClipboardTextarea } from './components/ui/clipboard-textarea';
+import { MaxLengthTextarea } from '@/components/ui/max-length-textarea';
+
+const MAX_LENGTH = 5000;
 
 function App() {
   const [inputText, setInputText] = useState('');
   const [outputText, setOutputText] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
+  const isOverflow = inputText.length > MAX_LENGTH;
+  const isDisabledImproveTextButton = isOverflow || inputText.length === 0;
 
   useEffect(() => {
     const unlisten = listen('clipboard-processed', (event: any) => {
@@ -126,18 +129,19 @@ function App() {
             <SelectItem value="soften">優しくする</SelectItem>
           </SelectContent>
         </Select>
-        <Textarea
+        <MaxLengthTextarea
+          maxLength={MAX_LENGTH}
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           placeholder="お疲れ様です。先日の件について、ご確認いただけますでしょうか。"
-          className="flex-1 resize-none"
+          className="flex-1 resize-none h-full"
         />
       </div>
       <div className="flex flex-col gap-2 w-full items-start">
         <Button
           variant="ghost"
           onClick={improveText}
-          disabled={inputText.length === 0}
+          disabled={isDisabledImproveTextButton}
           className="flex items-center gap-2"
         >
           <RefreshCcw className="size-4" />
