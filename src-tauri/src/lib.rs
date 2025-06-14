@@ -7,7 +7,6 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_store::StoreExt;
 
-// 校正APIを呼び出して文章を改善する関数
 #[tauri::command]
 async fn improve_text(text: &str, app_handle: tauri::AppHandle) -> Result<String, String> {
     // 利用回数制限のためのストア取得
