@@ -102,6 +102,10 @@ fn setup_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
                                 
                                 // ウィンドウを取得してイベントを発行（フロントエンドに通知）
                                 if let Some(window) = for_window.get_webview_window("main") {
+                                    // ウィンドウを最前面に表示し、フォーカスする
+                                    let _ = window.unminimize();
+                                    let _ = window.show();
+                                    let _ = window.set_focus();
                                     let _ = window.emit("clipboard-processed", 
                                                        (original, improved));
                                     println!("イベント発行完了");
