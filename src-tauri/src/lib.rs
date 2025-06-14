@@ -2,40 +2,48 @@
 use tauri::{App, AppHandle, Manager, Emitter};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+use std::env;
+use dotenv;
 
-// メール文章に変換する関数
+// 校正APIを呼び出して文章を改善する関数
 #[tauri::command]
-fn improve_text(text: &str) -> String {
-    println!(
-        "improve_text関数が呼び出されました: テキスト長さ {}",
-        text.len()
-    );
+async fn improve_text(text: &str) -> Result<String, String> {
+    println!("improve_text関数が呼び出されました: テキスト長さ {}", text.len());
 
-    // 簡単な例：改行を修正し、挨拶と締めくくりを追加
-    let mut improved = text.trim().to_string();
+    let client = reqwest::Client::new();
+    // .envや環境変数からURLを取得
+    let url = env::var("API_URL").map_err(|_| "API_URL環境変数が設定されていません".to_string())?;
 
-    // 余分な改行を削除
-    improved = improved.replace("\n\n\n", "\n\n");
+    let mut map: std::collections::HashMap<&'static str, &str> = std::collections::HashMap::new();
+    // TODO: 受け取ったタイプで、叩くエンドポイントを変える
+    let prompt = format!("次の文章を校正してください: {}", text);
+    map.insert("prompt", &prompt);
 
-    // 段落の間に適切な改行を入れる
-    if !improved.contains("\n\n") && improved.contains("\n") {
-        improved = improved.replace("\n", "\n\n");
+    let res = client
+        .post(url)
+        .json(&map)
+        .send()
+        .await
+        .map_err(|e| format!("HTTPリクエストエラー: {}", e))?;
+
+    let status = res.status();
+    let body = res.text().await.map_err(|e| format!("レスポンス読み取りエラー: {}", e))?;
+
+    if !status.is_success() {
+        println!("APIエラー: {} {}", status, body);
+        return Err(format!("APIエラー: {} {}", status, body));
     }
 
-    // 文章が短すぎる場合、簡単な挨拶を追加
-    if !improved.starts_with("お世話") && !improved.starts_with("いつも") {
-        improved = format!("お世話になっております。\n\n{}", improved);
+    // JSONとしてパースし、generatedTextキーの値を返す
+    let json: serde_json::Value = serde_json::from_str(&body)
+        .map_err(|e| format!("JSONパースエラー: {}", e))?;
+    if let Some(generated) = json.get("generatedText").and_then(|v| v.as_str()) {
+        println!("APIレスポンス受信: {}", generated.len());
+        Ok(generated.to_string())
+    } else {
+        println!("APIレスポンスにgeneratedTextがありません: {}", body);
+        Err("APIレスポンスにgeneratedTextがありません".to_string())
     }
-
-    // 締めくくりがない場合は追加
-    if !improved.ends_with("よろしくお願いいたします。")
-        && !improved.ends_with("よろしくお願いします。")
-    {
-        improved = format!("{}\n\n何卒よろしくお願いいたします。", improved);
-    }
-
-    println!("テキスト変換完了: 結果の長さ {}", improved.len());
-    improved
 }
 
 // JSからの呼び出し用のエントリーポイント
@@ -70,7 +78,13 @@ async fn process_clipboard_internal(app: AppHandle) -> Result<(String, String), 
     };
 
     // テキストを改善
-    let improved_text = improve_text(&clipboard_text);
+    let improved_text = match improve_text(&clipboard_text).await {
+        Ok(text) => text,
+        Err(e) => {
+            println!("校正APIエラー: {}", e);
+            return Err(e);
+        }
+    };
     println!("テキスト変換完了");
 
     // 元のテキストと改善されたテキストを返す
@@ -134,6 +148,7 @@ fn setup_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    dotenv::dotenv().ok();
     println!("アプリケーション起動");
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())

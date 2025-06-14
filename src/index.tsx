@@ -21,15 +21,8 @@ const MAX_LENGTH = 5000;
 function App() {
   const [inputText, setInputText] = useState('');
   const [outputText, setOutputText] = useState('');
-  const [globalErrorMessage, setGlobalErrorMessage] = useState('');
   const isOverflow = inputText.length > MAX_LENGTH;
   const isDisabledImproveTextButton = isOverflow || inputText.length === 0;
-
-  useEffect(() => {
-    if (globalErrorMessage) {
-      toast.error(globalErrorMessage);
-    }
-  }, [globalErrorMessage]);
 
   useEffect(() => {
     const unlisten = listen('clipboard-processed', (event: any) => {
@@ -37,12 +30,6 @@ function App() {
       setInputText(originalText);
       setOutputText(improvedText);
     });
-
-    const registerShortcut = async () => {
-      await register('Control+N', () => {});
-    };
-
-    registerShortcut();
 
     return () => {
       unregisterAll().catch(console.error);
@@ -59,7 +46,7 @@ function App() {
       // 結果を表示
       setOutputText(improved);
     } catch (error) {
-      setGlobalErrorMessage('テキスト変換に失敗しました');
+      toast.error('テキスト変換に失敗しました');
     }
   }
 
