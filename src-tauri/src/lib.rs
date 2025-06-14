@@ -1,13 +1,41 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+use chrono::Local;
 use dotenv;
 use std::env;
 use tauri::{App, AppHandle, Emitter, Manager};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+use tauri_plugin_store::StoreExt;
 
 // 校正APIを呼び出して文章を改善する関数
 #[tauri::command]
-async fn improve_text(text: &str) -> Result<String, String> {
+async fn improve_text(text: &str, app_handle: tauri::AppHandle) -> Result<String, String> {
+    // 利用回数制限のためのストア取得
+    let store = app_handle.store("usage.json").map_err(|e| {
+        serde_json::json!({"type": "store_error", "message": e.to_string()}).to_string()
+    })?;
+    let today = Local::now().format("%Y-%m-%d").to_string();
+    let mut request_count = store
+        .get("request_count")
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default();
+    let count = request_count
+        .get(&today)
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+    if count >= 5 {
+        return Err(serde_json::json!({
+            "type": "limit_exceeded",
+            "message": "本日の利用回数上限（5回）に達しました"
+        })
+        .to_string());
+    }
+    request_count.insert(today.clone(), serde_json::json!(count + 1));
+    store.set("request_count", serde_json::json!(request_count));
+    store.save().map_err(|e| {
+        serde_json::json!({"type": "store_error", "message": e.to_string()}).to_string()
+    })?;
+
     println!(
         "improve_text関数が呼び出されました: テキスト長さ {}",
         text.len()
@@ -15,7 +43,7 @@ async fn improve_text(text: &str) -> Result<String, String> {
 
     let client = reqwest::Client::new();
     // .envや環境変数からURLを取得
-    let url = env::var("API_URL").map_err(|_| "API_URL環境変数が設定されていません".to_string())?;
+    let url = env::var("API_URL").map_err(|_| serde_json::json!({"type": "env_error", "message": "API_URL環境変数が設定されていません"}).to_string())?;
 
     let mut map: std::collections::HashMap<&'static str, &str> = std::collections::HashMap::new();
     // TODO: 受け取ったタイプで、叩くエンドポイントを変える
@@ -27,7 +55,7 @@ async fn improve_text(text: &str) -> Result<String, String> {
         .json(&map)
         .send()
         .await
-        .map_err(|e| format!("HTTPリクエストエラー: {}", e))?;
+        .map_err(|e| serde_json::json!({"type": "http_error", "message": format!("HTTPリクエストエラー: {}", e)}).to_string())?;
 
     let status = res.status();
     let body = res
@@ -37,18 +65,26 @@ async fn improve_text(text: &str) -> Result<String, String> {
 
     if !status.is_success() {
         println!("APIエラー: {} {}", status, body);
-        return Err(format!("APIエラー: {} {}", status, body));
+        return Err(serde_json::json!({
+            "type": "api_error",
+            "message": format!("APIエラー: {} {}", status, body)
+        })
+        .to_string());
     }
 
     // JSONとしてパースし、generatedTextキーの値を返す
     let json: serde_json::Value =
-        serde_json::from_str(&body).map_err(|e| format!("JSONパースエラー: {}", e))?;
+        serde_json::from_str(&body).map_err(|e| serde_json::json!({"type": "parse_error", "message": format!("JSONパースエラー: {}", e)}).to_string())?;
     if let Some(generated) = json.get("generatedText").and_then(|v| v.as_str()) {
         println!("APIレスポンス受信: {}", generated.len());
         Ok(generated.to_string())
     } else {
         println!("APIレスポンスにgeneratedTextがありません: {}", body);
-        Err("APIレスポンスにgeneratedTextがありません".to_string())
+        Err(serde_json::json!({
+            "type": "api_error",
+            "message": "APIレスポンスにgeneratedTextがありません"
+        })
+        .to_string())
     }
 }
 
@@ -84,7 +120,7 @@ async fn process_clipboard_internal(app: AppHandle) -> Result<(String, String), 
     };
 
     // テキストを改善
-    let improved_text = match improve_text(&clipboard_text).await {
+    let improved_text = match improve_text(&clipboard_text, app.clone()).await {
         Ok(text) => text,
         Err(e) => {
             println!("校正APIエラー: {}", e);
@@ -161,6 +197,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_store::Builder::default().build())
         .setup(|app| {
             println!("セットアップ開始");
             setup_shortcuts(app)?;

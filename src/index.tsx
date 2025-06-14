@@ -33,7 +33,27 @@ function App() {
       setIsProcessing(true);
       invoke<string>('improve_text', { text: originalText })
         .then(setOutputText)
-        .catch(() => toast.error('テキスト変換に失敗しました'))
+        .catch((error) => {
+          let type = '';
+          let message = '';
+          if (typeof error === 'string') {
+            try {
+              const errObj = JSON.parse(error);
+              type = errObj.type;
+              message = errObj.message;
+            } catch {
+              // fallback: errorがJSONでなければそのまま
+              message = error;
+            }
+          }
+          if (type === 'limit_exceeded') {
+            toast.error('本日の利用回数上限（5回）に達しました');
+          } else if (message) {
+            toast.error(message);
+          } else {
+            toast.error('テキスト変換に失敗しました');
+          }
+        })
         .finally(() => setIsProcessing(false));
     });
 
@@ -53,7 +73,24 @@ function App() {
       // 結果を表示
       setOutputText(improved);
     } catch (error) {
-      toast.error('テキスト変換に失敗しました');
+      let type = '';
+      let message = '';
+      if (typeof error === 'string') {
+        try {
+          const errObj = JSON.parse(error);
+          type = errObj.type;
+          message = errObj.message;
+        } catch {
+          message = error;
+        }
+      }
+      if (type === 'limit_exceeded') {
+        toast.error('本日の利用回数上限（5回）に達しました');
+      } else if (message) {
+        toast.error(message);
+      } else {
+        toast.error('テキスト変換に失敗しました');
+      }
     } finally {
       setIsProcessing(false);
     }
