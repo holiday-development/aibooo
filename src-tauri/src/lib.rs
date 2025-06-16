@@ -1,6 +1,6 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 use chrono::Local;
-use dotenv;
+use dotenvy_macro::dotenv;
 use std::env;
 use tauri::{App, AppHandle, Emitter, Manager};
 use tauri_plugin_clipboard_manager::ClipboardExt;
@@ -44,7 +44,10 @@ async fn improve_text(text: &str, app_handle: tauri::AppHandle) -> Result<String
 
     let client = reqwest::Client::new();
     // .envや環境変数からURLを取得
-    let url = env::var("API_URL").map_err(|_| serde_json::json!({"type": "env_error", "message": "API_URL環境変数が設定されていません"}).to_string())?;
+    let url = dotenv!("API_URL");
+    if url.is_empty() {
+        return Err(serde_json::json!({"type": "env_error", "message": "API_URL環境変数が設定されていません"}).to_string());
+    }
 
     let mut map: std::collections::HashMap<&'static str, &str> = std::collections::HashMap::new();
     // TODO: 受け取ったタイプで、叩くエンドポイントを変える
@@ -164,7 +167,7 @@ fn setup_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
                         match process_clipboard_internal(handle_clone).await {
                             Ok((original, improved)) => {
                                 println!("process_clipboard 成功: 元テキスト長さ {}, 改善テキスト長さ {}", 
-                                         original.len(), improved.len());
+                                        original.len(), improved.len());
                                 if let Some(window) = for_window.get_webview_window("main") {
                                     let _ = window.emit("clipboard-processed", original);
                                     println!("イベント発行完了");
@@ -193,7 +196,6 @@ fn setup_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    dotenv::dotenv().ok();
     println!("アプリケーション起動");
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
