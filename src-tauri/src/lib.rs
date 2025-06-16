@@ -7,6 +7,8 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_store::StoreExt;
 
+static GENERATION_LIMIT: u64 = 30;
+
 #[tauri::command]
 async fn improve_text(text: &str, app_handle: tauri::AppHandle) -> Result<String, String> {
     // 利用回数制限のためのストア取得
@@ -22,10 +24,10 @@ async fn improve_text(text: &str, app_handle: tauri::AppHandle) -> Result<String
         .get(&today)
         .and_then(|v| v.as_u64())
         .unwrap_or(0);
-    if count >= 5 {
+    if count >= GENERATION_LIMIT {
         return Err(serde_json::json!({
             "type": "limit_exceeded",
-            "message": "本日の利用回数上限（5回）に達しました"
+            "message": format!("本日の利用回数上限（{}回）に達しました", GENERATION_LIMIT)
         })
         .to_string());
     }
