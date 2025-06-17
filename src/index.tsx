@@ -40,7 +40,10 @@ function App() {
       const originalText = event.payload as string;
       setInputText(originalText);
       setIsProcessing(true);
-      invoke<string>('convert_text', { text: originalText })
+      invoke<string>('convert_text', {
+        text: originalText,
+        type: convertType,
+      })
         .then(setOutputText)
         .catch((error) => {
           let type = '';

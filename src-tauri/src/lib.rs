@@ -83,14 +83,14 @@ async fn convert_text(
     // JSONとしてパースし、generatedTextキーの値を返す
     let json: serde_json::Value =
         serde_json::from_str(&body).map_err(|e| serde_json::json!({"type": "parse_error", "message": format!("JSONパースエラー: {}", e)}).to_string())?;
-    if let Some(generated) = json.get("generatedText").and_then(|v| v.as_str()) {
-        println!("APIレスポンス受信: {}", generated.len());
-        Ok(generated.to_string())
+    if let Some(output_text) = json.get("output_text").and_then(|v| v.as_str()) {
+        println!("APIレスポンス受信: {}", output_text.len());
+        Ok(output_text.to_string())
     } else {
-        println!("APIレスポンスにgeneratedTextがありません: {}", body);
+        println!("APIレスポンスにoutput_textがありません: {}", body);
         Err(serde_json::json!({
             "type": "api_error",
-            "message": "APIレスポンスにgeneratedTextがありません"
+            "message": "APIレスポンスにoutput_textがありません"
         })
         .to_string())
     }
@@ -190,9 +190,9 @@ fn setup_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
 
     // Control+N を登録
     #[cfg(target_os = "macos")]
-    let cmd_n_shortcut = Shortcut::new(Some(Modifiers::CONTROL), Code::KeyN);
+    let cmd_c_shortcut = Shortcut::new(Some(Modifiers::CONTROL), Code::KeyC);
 
-    app.global_shortcut().register(cmd_n_shortcut)?;
+    app.global_shortcut().register(cmd_c_shortcut)?;
     println!("ショートカット登録完了");
 
     Ok(())
