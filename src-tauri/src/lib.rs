@@ -8,9 +8,10 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 use tauri_plugin_store::StoreExt;
 
 static GENERATION_LIMIT: u64 = 30;
+const API_URL: &str = dotenv!("API_URL");
 
 #[tauri::command]
-async fn improve_text(text: &str, app_handle: tauri::AppHandle) -> Result<String, String> {
+async fn convert_text(text: &str, app_handle: tauri::AppHandle) -> Result<String, String> {
     // 利用回数制限のためのストア取得
     let store = app_handle.store("usage.json").map_err(|e| {
         serde_json::json!({"type": "store_error", "message": e.to_string()}).to_string()
@@ -38,13 +39,13 @@ async fn improve_text(text: &str, app_handle: tauri::AppHandle) -> Result<String
     })?;
 
     println!(
-        "improve_text関数が呼び出されました: テキスト長さ {}",
+        "convert_text関数が呼び出されました: テキスト長さ {}",
         text.len()
     );
 
     let client = reqwest::Client::new();
     // .envや環境変数からURLを取得
-    let url = dotenv!("API_URL");
+    let url = API_URL;
     if url.is_empty() {
         return Err(serde_json::json!({"type": "env_error", "message": "API_URL環境変数が設定されていません"}).to_string());
     }
@@ -124,7 +125,7 @@ async fn process_clipboard_internal(app: AppHandle) -> Result<(String, String), 
     };
 
     // テキストを改善
-    let improved_text = match improve_text(&clipboard_text, app.clone()).await {
+    let improved_text = match self::convert_text(&clipboard_text, app.clone()).await {
         Ok(text) => text,
         Err(e) => {
             println!("校正APIエラー: {}", e);
@@ -207,7 +208,7 @@ pub fn run() {
             println!("セットアップ完了");
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![improve_text, process_clipboard])
+        .invoke_handler(tauri::generate_handler![convert_text, process_clipboard])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
