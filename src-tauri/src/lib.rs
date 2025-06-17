@@ -7,11 +7,15 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_store::StoreExt;
 
-static GENERATION_LIMIT: u64 = 30;
+static GENERATION_LIMIT: u64 = 300;
 const API_URL: &str = dotenv!("API_URL");
 
 #[tauri::command]
-async fn convert_text(text: &str, app_handle: tauri::AppHandle) -> Result<String, String> {
+async fn convert_text(
+    text: &str,
+    type_: &str,
+    app_handle: tauri::AppHandle,
+) -> Result<String, String> {
     // 利用回数制限のためのストア取得
     let store = app_handle.store("usage.json").map_err(|e| {
         serde_json::json!({"type": "store_error", "message": e.to_string()}).to_string()
@@ -45,15 +49,14 @@ async fn convert_text(text: &str, app_handle: tauri::AppHandle) -> Result<String
 
     let client = reqwest::Client::new();
     // .envや環境変数からURLを取得
-    let url = API_URL;
+    let url = format!("{}/{}", API_URL, type_);
+    println!("url: {}", url);
     if url.is_empty() {
         return Err(serde_json::json!({"type": "env_error", "message": "API_URL環境変数が設定されていません"}).to_string());
     }
 
-    let mut map: std::collections::HashMap<&'static str, &str> = std::collections::HashMap::new();
-    // TODO: 受け取ったタイプで、叩くエンドポイントを変える
-    let prompt = format!("次の文章を校正してください: {}", text);
-    map.insert("prompt", &prompt);
+    let mut map: std::collections::HashMap<&'static str, String> = std::collections::HashMap::new();
+    map.insert("prompt", text.to_string());
 
     let res = client
         .post(url)
@@ -125,7 +128,7 @@ async fn process_clipboard_internal(app: AppHandle) -> Result<(String, String), 
     };
 
     // テキストを改善
-    let improved_text = match self::convert_text(&clipboard_text, app.clone()).await {
+    let improved_text = match self::convert_text(&clipboard_text, "revision", app.clone()).await {
         Ok(text) => text,
         Err(e) => {
             println!("校正APIエラー: {}", e);

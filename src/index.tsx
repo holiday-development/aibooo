@@ -17,6 +17,7 @@ import { MaxLengthTextarea } from '@/components/ui/max-length-textarea';
 import { toast } from 'sonner';
 
 const MAX_LENGTH = 5000;
+const GENERATION_LIMIT = 300;
 
 type ConvertType =
   | 'translate'
@@ -74,13 +75,13 @@ function App() {
   async function convertText() {
     try {
       setIsProcessing(true);
-      const improved = await invoke<string>('convert_text', {
+      const converted = await invoke<string>('convert_text', {
         text: inputText,
         type: convertType,
       });
 
       // 結果を表示
-      setOutputText(improved);
+      setOutputText(converted);
     } catch (error) {
       let type = '';
       let message = '';
@@ -94,7 +95,7 @@ function App() {
         }
       }
       if (type === 'limit_exceeded') {
-        toast.error('本日の利用回数上限（5回）に達しました');
+        toast.error(`本日の利用回数上限（${GENERATION_LIMIT}回）に達しました`);
       } else if (message) {
         toast.error(message);
       } else {
