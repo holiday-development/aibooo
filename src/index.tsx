@@ -15,6 +15,7 @@ import { RefreshCcw } from 'lucide-react';
 import { ClipboardTextarea } from './components/ui/clipboard-textarea';
 import { MaxLengthTextarea } from '@/components/ui/max-length-textarea';
 import { toast } from 'sonner';
+import { load } from '@tauri-apps/plugin-store';
 
 const MAX_LENGTH = 5000;
 const GENERATION_LIMIT = 300;
@@ -33,6 +34,25 @@ function App() {
   const isDisabledConvertTextButton = isOverflow || inputText.length === 0;
   const [isProcessing, setIsProcessing] = useState(false);
   const [convertType, setConvertType] = useState<ConvertType>('translate');
+
+  async function loadConvertTypeStore() {
+    const store = await load('usage.json');
+    const convertType = store.get('convert_type');
+    return convertType;
+  }
+
+  async function onConvertTypeChange(value: ConvertType) {
+    setConvertType(value);
+    const store = await load('usage.json');
+    store.set('convert_type', value);
+    store.save();
+  }
+
+  useEffect(() => {
+    loadConvertTypeStore().then((convertType) => {
+      setConvertType(convertType as ConvertType);
+    });
+  }, []);
 
   useEffect(() => {
     const unlisten = listen('clipboard-processed', (event: any) => {
@@ -112,10 +132,7 @@ function App() {
   return (
     <div className="flex gap-5 h-screen p-6 w-full">
       <div className="flex flex-col gap-2 w-full">
-        <Select
-          value={convertType}
-          onValueChange={(value) => setConvertType(value as ConvertType)}
-        >
+        <Select value={convertType} onValueChange={onConvertTypeChange}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="校閲する" />
           </SelectTrigger>
