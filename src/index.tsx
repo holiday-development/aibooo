@@ -15,23 +15,56 @@ import { RefreshCcw } from 'lucide-react';
 import { ClipboardTextarea } from './components/ui/clipboard-textarea';
 import { MaxLengthTextarea } from '@/components/ui/max-length-textarea';
 import { toast } from 'sonner';
+import { load } from '@tauri-apps/plugin-store';
 
 const MAX_LENGTH = 5000;
+const GENERATION_LIMIT = 300;
+
+type ConvertType =
+  | 'translate'
+  | 'revision'
+  | 'summarize'
+  | 'formalize'
+  | 'heartful';
 
 function App() {
   const [inputText, setInputText] = useState('');
   const [outputText, setOutputText] = useState('');
   const isOverflow = inputText.length > MAX_LENGTH;
-  const isDisabledImproveTextButton = isOverflow || inputText.length === 0;
+  const isDisabledConvertTextButton = isOverflow || inputText.length === 0;
   const [isProcessing, setIsProcessing] = useState(false);
+  const [convertType, setConvertType] = useState<ConvertType>('translate');
+
+  async function loadConvertTypeStore() {
+    const store = await load('usage.json');
+    const convertType = store.get('convert_type');
+    return convertType;
+  }
+
+  async function onConvertTypeChange(value: ConvertType) {
+    setConvertType(value);
+    const store = await load('usage.json');
+    store.set('convert_type', value);
+    store.save();
+  }
 
   useEffect(() => {
-    const unlisten = listen('clipboard-processed', (event: any) => {
-      // TODO: Clidentg側でClipboardの内容を取得して、それをセットする
+    loadConvertTypeStore().then((convertType) => {
+      setConvertType(convertType as ConvertType);
+    });
+  }, []);
+
+  useEffect(() => {
+    const unlisten = listen('clipboard-processed', async (event: any) => {
+      // TODO: Clident側でClipboardの内容を取得して、それをセットする
       const originalText = event.payload as string;
       setInputText(originalText);
       setIsProcessing(true);
-      invoke<string>('improve_text', { text: originalText })
+      const convertTypeFromStore = await loadConvertTypeStore();
+      invoke<string>('convert_text', {
+        text: originalText,
+        type: convertTypeFromStore,
+      })
         .then(setOutputText)
         .catch((error) => {
           let type = '';
@@ -47,7 +80,7 @@ function App() {
             }
           }
           if (type === 'limit_exceeded') {
-            toast.error('本日の利用回数上限（5回）に達しました');
+            toast.error(error.message);
           } else if (message) {
             toast.error(message);
           } else {
@@ -63,15 +96,16 @@ function App() {
     };
   }, []);
 
-  async function improveText() {
+  async function convertText() {
     try {
       setIsProcessing(true);
-      const improved = await invoke<string>('improve_text', {
+      const converted = await invoke<string>('convert_text', {
         text: inputText,
+        type: convertType,
       });
 
       // 結果を表示
-      setOutputText(improved);
+      setOutputText(converted);
     } catch (error) {
       let type = '';
       let message = '';
@@ -85,7 +119,7 @@ function App() {
         }
       }
       if (type === 'limit_exceeded') {
-        toast.error('本日の利用回数上限（5回）に達しました');
+        toast.error(`本日の利用回数上限（${GENERATION_LIMIT}回）に達しました`);
       } else if (message) {
         toast.error(message);
       } else {
@@ -99,15 +133,16 @@ function App() {
   return (
     <div className="flex gap-5 h-screen p-6 w-full">
       <div className="flex flex-col gap-2 w-full">
-        <Select>
+        <Select value={convertType} onValueChange={onConvertTypeChange}>
           <SelectTrigger className="w-[180px]">
-            <SelectValue defaultValue="kousei" placeholder="校正する" />
+            <SelectValue placeholder="校閲する" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="kousei">校正する</SelectItem>
-            <SelectItem value="summarize">要約する</SelectItem>
             <SelectItem value="translate">翻訳する</SelectItem>
-            <SelectItem value="soften">優しくする</SelectItem>
+            <SelectItem value="revision">校閲する</SelectItem>
+            <SelectItem value="summarize">まとめる</SelectItem>
+            <SelectItem value="formalize">礼儀正しくする</SelectItem>
+            <SelectItem value="heartful">優しくする</SelectItem>
           </SelectContent>
         </Select>
         <MaxLengthTextarea
@@ -121,8 +156,8 @@ function App() {
       <div className="flex flex-col gap-2 w-full items-start">
         <Button
           variant="ghost"
-          onClick={improveText}
-          disabled={isDisabledImproveTextButton}
+          onClick={convertText}
+          disabled={isDisabledConvertTextButton}
           className="flex items-center gap-2"
         >
           {isProcessing ? (
