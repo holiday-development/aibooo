@@ -115,6 +115,7 @@ export function Generator() {
             <SelectItem value="summarize">まとめる</SelectItem>
             <SelectItem value="formalize">礼儀正しくする</SelectItem>
             <SelectItem value="heartful">優しくする</SelectItem>
+            <SelectItem value="spark">独創的にする</SelectItem>
           </SelectContent>
         </Select>
         <MaxLengthTextarea
