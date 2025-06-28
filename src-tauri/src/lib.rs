@@ -188,9 +188,9 @@ fn setup_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
             .build(),
     )?;
 
-    // Control+N を登録
+    // Command+D ショートカットを設定
     #[cfg(target_os = "macos")]
-    let cmd_c_shortcut = Shortcut::new(Some(Modifiers::CONTROL), Code::KeyC);
+    let cmd_c_shortcut = Shortcut::new(Some(Modifiers::SUPER), Code::KeyD);
 
     app.global_shortcut().register(cmd_c_shortcut)?;
     println!("ショートカット登録完了");
