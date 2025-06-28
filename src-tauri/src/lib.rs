@@ -103,32 +103,47 @@ async fn process_clipboard(app_handle: AppHandle) -> Result<(String, String), St
     process_clipboard_internal(app_handle).await
 }
 
-// クリップボードから文章を取得して改善し、元のテキストと改善後のテキストを返す
-async fn process_clipboard_internal(app: AppHandle) -> Result<(String, String), String> {
-    println!("process_clipboard_internal 開始");
-
-    // クリップボードからテキストを取得
-    let clipboard_text = match app.clipboard().read_text() {
+fn get_clipboard_text(app: AppHandle) -> Result<String, String> {
+    match app.clipboard().read_text() {
         Ok(text) => {
             if text.is_empty() {
                 println!("クリップボードが空です");
-                return Err("クリップボードが空です".to_string());
+                Err("クリップボードが空です".to_string())
+            } else {
+                println!(
+                    "クリップボードからテキストを取得しました: 長さ {}",
+                    text.len()
+                );
+                Ok(text)
             }
-            println!(
-                "クリップボードからテキストを取得しました: 長さ {}",
-                text.len()
-            );
-            text
         }
         Err(e) => {
             let err_msg = format!("クリップボード読み取りエラー: {}", e);
             println!("{}", err_msg);
-            return Err(err_msg);
+            Err(err_msg)
         }
-    };
+    }
+}
+// クリップボードから文章を取得して改善し、元のテキストと改善後のテキストを返す
+async fn process_clipboard_internal(app: AppHandle) -> Result<(String, String), String> {
+    println!("process_clipboard_internal 開始");
+    let clipboard_text = get_clipboard_text(app.clone())?;
+
+    // storeから変換タイプを取得（なければ'revision'）
+    let store = app.store("usage.json").map_err(|e| {
+        let msg = format!("store取得エラー: {}", e);
+        println!("{}", msg);
+        msg
+    })?;
+    let convert_type = store
+        .get("convert_type")
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .unwrap_or_else(|| "revision".to_string());
+    println!("storeから取得したconvert_type: {}", convert_type);
 
     // テキストを改善
-    let improved_text = match self::convert_text(&clipboard_text, "revision", app.clone()).await {
+    let improved_text = match self::convert_text(&clipboard_text, &convert_type, app.clone()).await
+    {
         Ok(text) => text,
         Err(e) => {
             println!("校正APIエラー: {}", e);
@@ -157,7 +172,6 @@ fn setup_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
                     println!("Shortcut triggered: {:?}", shortcut);
                     let handle_clone = handle.clone();
                     tauri::async_runtime::spawn(async move {
-                        println!("process_clipboard 呼び出し前");
                         let for_window = handle_clone.clone();
                         // ウィンドウを取得して最初に表示・フォーカス
                         if let Some(window) = for_window.get_webview_window("main") {
@@ -167,21 +181,14 @@ fn setup_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
                         } else {
                             eprintln!("メインウィンドウが見つかりません");
                         }
-                        // その後API処理
-                        match process_clipboard_internal(handle_clone).await {
-                            Ok((original, improved)) => {
-                                println!("process_clipboard 成功: 元テキスト長さ {}, 改善テキスト長さ {}", 
-                                        original.len(), improved.len());
-                                if let Some(window) = for_window.get_webview_window("main") {
-                                    let _ = window.emit("clipboard-processed", original);
-                                    println!("イベント発行完了");
-                                } else {
-                                    eprintln!("メインウィンドウが見つかりません");
-                                }
-                            }
-                            Err(e) => eprintln!("Error processing clipboard: {}", e),
+                        if let Some(window) = for_window.get_webview_window("main") {
+                            let clipboard_text =
+                                get_clipboard_text(for_window.clone()).unwrap_or_default();
+                            let _ = window.emit("clipboard-processed", clipboard_text);
+                            println!("イベント発行完了");
+                        } else {
+                            eprintln!("メインウィンドウが見つかりません");
                         }
-                        println!("process_clipboard 呼び出し後");
                     });
                 }
             })

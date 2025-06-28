@@ -55,14 +55,15 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const unlisten = listen('clipboard-processed', (event: any) => {
+    const unlisten = listen('clipboard-processed', async (event: any) => {
       // TODO: Clident側でClipboardの内容を取得して、それをセットする
       const originalText = event.payload as string;
       setInputText(originalText);
       setIsProcessing(true);
+      const convertTypeFromStore = await loadConvertTypeStore();
       invoke<string>('convert_text', {
         text: originalText,
-        type: convertType,
+        type: convertTypeFromStore,
       })
         .then(setOutputText)
         .catch((error) => {
