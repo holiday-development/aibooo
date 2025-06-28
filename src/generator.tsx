@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { unregisterAll } from '@tauri-apps/plugin-global-shortcut';
 import { listen } from '@tauri-apps/api/event';
-import './index.css';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -16,9 +15,9 @@ import { ClipboardTextarea } from './components/ui/clipboard-textarea';
 import { MaxLengthTextarea } from '@/components/ui/max-length-textarea';
 import { toast } from 'sonner';
 import { load } from '@tauri-apps/plugin-store';
+import { useAppScreen } from '@/context/app-screen-context';
 
 const MAX_LENGTH = 5000;
-const GENERATION_LIMIT = 300;
 
 type ConvertType =
   | 'translate'
@@ -27,13 +26,14 @@ type ConvertType =
   | 'formalize'
   | 'heartful';
 
-function App() {
+export function Generator() {
   const [inputText, setInputText] = useState('');
   const [outputText, setOutputText] = useState('');
   const isOverflow = inputText.length > MAX_LENGTH;
   const isDisabledConvertTextButton = isOverflow || inputText.length === 0;
   const [isProcessing, setIsProcessing] = useState(false);
   const [convertType, setConvertType] = useState<ConvertType>('translate');
+  const { setScreen } = useAppScreen();
 
   async function loadConvertTypeStore() {
     const store = await load('usage.json');
@@ -56,7 +56,6 @@ function App() {
 
   useEffect(() => {
     const unlisten = listen('clipboard-processed', async (event: any) => {
-      // TODO: Clident側でClipboardの内容を取得して、それをセットする
       const originalText = event.payload as string;
       setInputText(originalText);
       setIsProcessing(true);
@@ -67,22 +66,9 @@ function App() {
       })
         .then(setOutputText)
         .catch((error) => {
-          let type = '';
-          let message = '';
-          if (typeof error === 'string') {
-            try {
-              const errObj = JSON.parse(error);
-              type = errObj.type;
-              message = errObj.message;
-            } catch {
-              // fallback: errorがJSONでなければそのまま
-              message = error;
-            }
-          }
-          if (type === 'limit_exceeded') {
-            toast.error(error.message);
-          } else if (message) {
-            toast.error(message);
+          const errObj = JSON.parse(error as string);
+          if (errObj.type === 'limit_exceeded') {
+            setScreen('LIMIT_EXCEEDED');
           } else {
             toast.error('テキスト変換に失敗しました');
           }
@@ -103,25 +89,11 @@ function App() {
         text: inputText,
         type: convertType,
       });
-
-      // 結果を表示
       setOutputText(converted);
     } catch (error) {
-      let type = '';
-      let message = '';
-      if (typeof error === 'string') {
-        try {
-          const errObj = JSON.parse(error);
-          type = errObj.type;
-          message = errObj.message;
-        } catch {
-          message = error;
-        }
-      }
-      if (type === 'limit_exceeded') {
-        toast.error(`本日の利用回数上限（${GENERATION_LIMIT}回）に達しました`);
-      } else if (message) {
-        toast.error(message);
+      const errObj = JSON.parse(error as string);
+      if (errObj.type === 'limit_exceeded') {
+        setScreen('LIMIT_EXCEEDED');
       } else {
         toast.error('テキスト変換に失敗しました');
       }
@@ -131,7 +103,7 @@ function App() {
   }
 
   return (
-    <div className="flex gap-5 h-screen p-6 w-full">
+    <>
       <div className="flex flex-col gap-2 w-full">
         <Select value={convertType} onValueChange={onConvertTypeChange}>
           <SelectTrigger className="w-[180px]">
@@ -174,8 +146,6 @@ function App() {
           className="flex-1 resize-none h-full"
         />
       </div>
-    </div>
+    </>
   );
 }
-
-export default App;
