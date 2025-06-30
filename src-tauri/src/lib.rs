@@ -7,7 +7,7 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_store::StoreExt;
 
-static GENERATION_LIMIT: u64 = 300;
+static GENERATION_LIMIT: u64 = 20;
 const API_URL: &str = dotenv!("API_URL");
 
 #[tauri::command]
