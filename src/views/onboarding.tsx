@@ -6,6 +6,7 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from '@/components/ui/carousel';
+import { useScreenType } from '@/contexts/use-screen-type';
 import { ArrowRightIcon, CommandIcon, PlusIcon, XIcon } from 'lucide-react';
 
 export function Onboarding() {
@@ -20,8 +21,14 @@ export function Onboarding() {
 }
 
 function CloseButton() {
+  const { switchScreenType } = useScreenType();
+
+  const handleClose = () => {
+    switchScreenType('MAIN');
+  };
+
   return (
-    <Button size="icon" variant="ghost">
+    <Button size="icon" variant="ghost" onClick={handleClose}>
       <XIcon width={24} height={24} className="text-gray-400" />
     </Button>
   );
@@ -36,6 +43,12 @@ function CommandBlock({ children }: { children: React.ReactNode }) {
 }
 
 function OnboardingCarousel() {
+  const { switchScreenType } = useScreenType();
+
+  const handleStart = () => {
+    switchScreenType('MAIN');
+  };
+
   return (
     <Carousel className="w-full h-full p-8">
       <CarouselContent>
@@ -64,7 +77,12 @@ function OnboardingCarousel() {
           <img src="/usage-example.svg" alt="usage example" />
         </CarouselItem>
         <CarouselItem>
-          <h1 className="text-3xl">限りなくシームレス</h1>
+          <div className="flex gap-4">
+            <h1 className="text-3xl">限りなくシームレス</h1>
+            <Button size="lg" onClick={handleStart}>
+              さあ、始めよう
+            </Button>
+          </div>
           <div className="h-[200px] flex justify-center mt-12 mx-auto">
             <img src="/generation-example.svg" alt="generation example" />
           </div>

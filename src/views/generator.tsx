@@ -15,7 +15,7 @@ import { ClipboardTextarea } from '../components/ui/clipboard-textarea';
 import { MaxLengthTextarea } from '@/components/ui/max-length-textarea';
 import { toast } from 'sonner';
 import { load } from '@tauri-apps/plugin-store';
-import { useScreenType } from '@/hooks/use-screen-type';
+import { useScreenType } from '@/contexts/use-screen-type';
 
 const MAX_LENGTH = 5000;
 
