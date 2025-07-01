@@ -1,13 +1,16 @@
-import { LimitExceeded } from '@/limit-exceeeded';
-import { useAppScreen } from '@/context/app-screen-context';
-import { Generator } from '@/generator';
+import { LimitExceeded } from '@/views/limit-exceeeded';
+import { Generator } from '@/views/generator';
 import { useCallback } from 'react';
+import { useScreenType } from '@/hooks/use-screen-type';
+import { Onboarding } from '@/views/onboarding';
 
 export default function App() {
-  const { screen } = useAppScreen();
+  const { screenType } = useScreenType();
 
   const getScreen = useCallback(() => {
-    switch (screen) {
+    switch (screenType) {
+      case 'ONBOARDING':
+        return <Onboarding />;
       case 'MAIN':
         return <Generator />;
       case 'LIMIT_EXCEEDED':
