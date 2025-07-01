@@ -6,7 +6,7 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from '@/components/ui/carousel';
-import { XIcon } from 'lucide-react';
+import { ArrowRightIcon, CommandIcon, PlusIcon, XIcon } from 'lucide-react';
 
 export function Onboarding() {
   return (
@@ -27,6 +27,14 @@ function CloseButton() {
   );
 }
 
+function CommandBlock({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="w-12 h-12 flex items-center justify-center bg-white rounded-lg p-3 text-black text-2xl">
+      {children}
+    </div>
+  );
+}
+
 function OnboardingCarousel() {
   return (
     <Carousel className="w-full h-full p-8">
@@ -37,8 +45,29 @@ function OnboardingCarousel() {
             <img src="/ai.svg" alt="ai" />
           </div>
         </CarouselItem>
+        <CarouselItem className="flex flex-col justify-between gap-8">
+          <div className="flex justify-start items-center gap-2">
+            <CommandBlock>
+              <CommandIcon />
+            </CommandBlock>
+            <PlusIcon />
+            <CommandBlock>C</CommandBlock>
+            <div className="px-4">
+              <ArrowRightIcon />
+            </div>
+            <CommandBlock>
+              <CommandIcon />
+            </CommandBlock>
+            <PlusIcon />
+            <CommandBlock>D</CommandBlock>
+          </div>
+          <img src="/usage-example.svg" alt="usage example" />
+        </CarouselItem>
         <CarouselItem>
-          <div>2</div>
+          <h1 className="text-3xl">限りなくシームレス</h1>
+          <div className="h-[200px] flex justify-center mt-12 mx-auto">
+            <img src="/generation-example.svg" alt="generation example" />
+          </div>
         </CarouselItem>
       </CarouselContent>
       <div className="absolute bottom-4 left-10 z-10">

@@ -20,5 +20,9 @@ export default function App() {
     }
   }, [screen]);
 
-  return <div className="flex gap-5 h-screen p-6 w-full">{getScreen()}</div>;
+  return (
+    <div className="flex gap-5 h-screen p-6 w-full overflow-hidden">
+      {getScreen()}
+    </div>
+  );
 }
