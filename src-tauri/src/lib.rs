@@ -219,6 +219,13 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![convert_text, process_clipboard])
+        .on_window_event(|window, event| {
+            use tauri::WindowEvent;
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                window.hide().unwrap();
+                api.prevent_close();
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
