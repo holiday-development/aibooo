@@ -11,11 +11,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { RefreshCcw } from 'lucide-react';
-import { ClipboardTextarea } from './components/ui/clipboard-textarea';
+import { ClipboardTextarea } from '../components/ui/clipboard-textarea';
 import { MaxLengthTextarea } from '@/components/ui/max-length-textarea';
 import { toast } from 'sonner';
 import { load } from '@tauri-apps/plugin-store';
-import { useAppScreen } from '@/context/app-screen-context';
+import { useScreenType } from '@/contexts/use-screen-type';
 
 const MAX_LENGTH = 5000;
 
@@ -33,7 +33,7 @@ export function Generator() {
   const isDisabledConvertTextButton = isOverflow || inputText.length === 0;
   const [isProcessing, setIsProcessing] = useState(false);
   const [convertType, setConvertType] = useState<ConvertType>('translate');
-  const { setScreen } = useAppScreen();
+  const { switchScreenType } = useScreenType();
 
   async function loadConvertTypeStore() {
     const store = await load('usage.json');
@@ -68,7 +68,7 @@ export function Generator() {
         .catch((error) => {
           const errObj = JSON.parse(error as string);
           if (errObj.type === 'limit_exceeded') {
-            setScreen('LIMIT_EXCEEDED');
+            switchScreenType('LIMIT_EXCEEDED');
           } else {
             toast.error('テキスト変換に失敗しました');
           }
@@ -93,7 +93,7 @@ export function Generator() {
     } catch (error) {
       const errObj = JSON.parse(error as string);
       if (errObj.type === 'limit_exceeded') {
-        setScreen('LIMIT_EXCEEDED');
+        switchScreenType('LIMIT_EXCEEDED');
       } else {
         toast.error('テキスト変換に失敗しました');
       }

@@ -2,14 +2,14 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './app';
 import { Toaster } from 'sonner';
-import { AppScreenProvider } from '@/context/app-screen-context';
 import './index.css';
+import { ScreenTypeProvider } from '@/contexts/use-screen-type';
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <AppScreenProvider>
+    <ScreenTypeProvider>
       <Toaster position="bottom-left" richColors />
       <App />
-    </AppScreenProvider>
+    </ScreenTypeProvider>
   </React.StrictMode>
 );
