@@ -48,9 +48,7 @@ export const ScreenTypeProvider = ({ children }: { children: ReactNode }) => {
 
   async function initialScreenType() {
     const screenType = await loadScreenTypeStore();
-    if (screenType) {
-      setScreenType(screenType as ScreenType);
-    }
+    setScreenType((screenType as ScreenType | undefined) || 'ONBOARDING');
     const todayRequestCount = await loadTodayRequestCount();
     if (todayRequestCount >= GENERATION_LIMIT) {
       switchScreenType('LIMIT_EXCEEDED');
