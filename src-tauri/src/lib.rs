@@ -197,9 +197,11 @@ fn setup_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
 
     // Command+D ショートカットを設定
     #[cfg(target_os = "macos")]
-    let cmd_c_shortcut = Shortcut::new(Some(Modifiers::SUPER), Code::KeyD);
+    let hot_key_shortcut = Shortcut::new(Some(Modifiers::SUPER), Code::KeyD);
+    #[cfg(target_os = "windows")]
+    let hot_key_shortcut = Shortcut::new(Some(Modifiers::CONTROL), Code::KeyD);
 
-    app.global_shortcut().register(cmd_c_shortcut)?;
+    app.global_shortcut().register(hot_key_shortcut)?;
     println!("ショートカット登録完了");
 
     Ok(())
