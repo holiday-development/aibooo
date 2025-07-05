@@ -53,6 +53,12 @@ export const ScreenTypeProvider = ({ children }: { children: ReactNode }) => {
     if (todayRequestCount >= GENERATION_LIMIT) {
       switchScreenType('LIMIT_EXCEEDED');
     }
+    if (
+      screenType === 'LIMIT_EXCEEDED' &&
+      todayRequestCount < GENERATION_LIMIT
+    ) {
+      switchScreenType('MAIN');
+    }
   }
 
   useEffect(() => {
