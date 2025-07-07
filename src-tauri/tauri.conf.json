@@ -36,15 +36,15 @@
     ],
     "macOS": {
       "signingIdentity": "-"
-    },
-    "plugins": {
-      "updater": {
-        "active": true,
-        "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg5OTVGQ0Y5RkI0OTBCQTgKUldTb0MwbjcrZnlWaVFMRklHakdKc1p1L0lxWkc3ZGRpRXRDM3BqVGtYaXRicG5NTFRtZ0ErTloK",
-        "endpoints": [
-          "https://github.com//holiday-development/aibooo/releases/download/app-v0.1.0/aibooo_0.1.0_aarch64.dmg"
-        ]
-      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg5OTVGQ0Y5RkI0OTBCQTgKUldTb0MwbjcrZnlWaVFMRklHakdKc1p1L0lxWkc3ZGRpRXRDM3BqVGtYaXRicG5NTFRtZ0ErTloK",
+      "endpoints": [
+        "https://github.com//holiday-development/aibooo/releases/download/app-v0.1.0/aibooo_0.1.0_aarch64.dmg"
+      ]
     }
   }
 }
