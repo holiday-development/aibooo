@@ -1,11 +1,18 @@
 import { LimitExceeded } from '@/views/limit-exceeeded';
 import { Generator } from '@/views/generator';
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useScreenType } from '@/contexts/use-screen-type';
 import { Onboarding } from '@/views/onboarding';
+import { checkForUpdate } from '@/lib/checkForUpdate';
 
 export default function App() {
   const { screenType } = useScreenType();
+
+  useEffect(() => {
+    if (screenType === 'MAIN') {
+      checkForUpdate();
+    }
+  }, [screenType]);
 
   const getScreen = useCallback(() => {
     switch (screenType) {
