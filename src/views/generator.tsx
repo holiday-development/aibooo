@@ -17,7 +17,7 @@ import { toast } from 'sonner';
 import { load } from '@tauri-apps/plugin-store';
 import { useScreenType } from '@/contexts/use-screen-type';
 
-const MAX_LENGTH = 5000;
+const MAX_LENGTH = 1000;
 
 type ConvertType =
   | 'translate'
