@@ -28,7 +28,7 @@ dependencies = [
 
 [[package]]
 name = "aibooo"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "dotenvy_macro",
