@@ -23,6 +23,11 @@ jobs:
           node-version: 22
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
+      - name: Install universal targets for Rust
+        if: startsWith(matrix.platform, 'macos')
+        run: |
+          rustup target add aarch64-apple-darwin
+          rustup target add x86_64-apple-darwin
       - name: install dependencies (ubuntu only)
         if: matrix.platform == 'ubuntu-20.04'
         run: |
