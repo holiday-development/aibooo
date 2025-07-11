@@ -75,9 +75,44 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD}}
         with:
-          tagName: app-v__VERSION__ # the action automatically replaces __VERSION__ with the app version
-          releaseName: 'App v__VERSION__'
-          releaseBody: 'See the assets to download this version and install.'
-          releaseDraft: true
-          prerelease: false
           args: ${{ startsWith(matrix.platform, 'macos') && '--target universal-apple-darwin' || '' }}
+
+      - name: Rename all artifacts to fixed names
+        run: |
+          # macOS
+          if ls src-tauri/target/release/bundle/dmg/aibooo_*_universal.dmg 1> /dev/null 2>&1; then
+            mv src-tauri/target/release/bundle/dmg/aibooo_*_universal.dmg src-tauri/target/release/bundle/dmg/aibooo_universal.dmg
+          fi
+          if ls src-tauri/target/release/bundle/dmg/aibooo_*_aarch64.dmg 1> /dev/null 2>&1; then
+            mv src-tauri/target/release/bundle/dmg/aibooo_*_aarch64.dmg src-tauri/target/release/bundle/dmg/aibooo_aarch64.dmg
+          fi
+          # Windows MSI
+          if ls src-tauri/target/release/bundle/msi/aibooo_*_x64_en-US.msi 1> /dev/null 2>&1; then
+            mv src-tauri/target/release/bundle/msi/aibooo_*_x64_en-US.msi src-tauri/target/release/bundle/msi/aibooo.msi
+          fi
+          if ls src-tauri/target/release/bundle/msi/aibooo_*_x64_en-US.msi.sig 1> /dev/null 2>&1; then
+            mv src-tauri/target/release/bundle/msi/aibooo_*_x64_en-US.msi.sig src-tauri/target/release/bundle/msi/aibooo.msi.sig
+          fi
+          # Windows NSIS
+          if ls src-tauri/target/release/bundle/nsis/aibooo_*_x64-setup.exe 1> /dev/null 2>&1; then
+            mv src-tauri/target/release/bundle/nsis/aibooo_*_x64-setup.exe src-tauri/target/release/bundle/nsis/aibooo_setup.exe
+          fi
+          if ls src-tauri/target/release/bundle/nsis/aibooo_*_x64-setup.exe.sig 1> /dev/null 2>&1; then
+            mv src-tauri/target/release/bundle/nsis/aibooo_*_x64-setup.exe.sig src-tauri/target/release/bundle/nsis/aibooo_setup.exe.sig
+          fi
+
+      - name: Upload fixed-named artifacts to release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: app-v${{ github.run_number }}
+          name: 'App v${{ github.run_number }}'
+          body: 'See the assets to download this version and install.'
+          draft: true
+          prerelease: false
+          files: |
+            src-tauri/target/release/bundle/dmg/aibooo_universal.dmg
+            src-tauri/target/release/bundle/dmg/aibooo_aarch64.dmg
+            src-tauri/target/release/bundle/msi/aibooo.msi
+            src-tauri/target/release/bundle/msi/aibooo.msi.sig
+            src-tauri/target/release/bundle/nsis/aibooo_setup.exe
+            src-tauri/target/release/bundle/nsis/aibooo_setup.exe.sig
