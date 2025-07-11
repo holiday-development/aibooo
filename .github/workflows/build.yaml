@@ -78,6 +78,8 @@ jobs:
           args: ${{ startsWith(matrix.platform, 'macos') && '--target universal-apple-darwin' || '' }}
 
       - name: Rename all artifacts to fixed names
+        if: runner.os != 'Windows'
+        shell: bash
         run: |
           # macOS
           if ls src-tauri/target/release/bundle/dmg/aibooo_*_universal.dmg 1> /dev/null 2>&1; then
