@@ -41,19 +41,19 @@ export function Login() {
     switchScreenType('LIMIT_EXCEEDED');
   };
 
-  return (
-    <div className="h-full w-full p-8 flex flex-col justify-center items-center">
-      <div className="w-full max-w-md space-y-6">
+    return (
+    <div className="h-full w-full p-4 flex flex-col justify-center items-center">
+      <div className="w-full max-w-sm space-y-4">
         <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold">ログイン</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl font-bold">ログイン</h1>
+          <p className="text-sm text-muted-foreground">
             プレミアムプランにアップグレードして無制限でご利用いただけます
           </p>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">メールアドレス</Label>
+        <form onSubmit={handleLogin} className="space-y-3">
+          <div className="space-y-1">
+            <Label htmlFor="email" className="text-sm">メールアドレス</Label>
             <Input
               id="email"
               type="email"
@@ -61,11 +61,12 @@ export function Login() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              className="h-9"
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="password">パスワード</Label>
+          <div className="space-y-1">
+            <Label htmlFor="password" className="text-sm">パスワード</Label>
             <Input
               id="password"
               type="password"
@@ -73,12 +74,13 @@ export function Login() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              className="h-9"
             />
           </div>
 
           <Button
             type="submit"
-            className="w-full"
+            className="w-full h-9"
             disabled={isLoading}
           >
             {isLoading ? 'ログイン中...' : 'ログイン'}
@@ -86,9 +88,9 @@ export function Login() {
         </form>
 
         <div className="text-center space-y-2">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             アカウントをお持ちでない場合は、
-            <Button variant="link" className="p-0 h-auto text-sm">
+            <Button variant="link" className="p-0 h-auto text-xs">
               新規登録
             </Button>
           </p>
@@ -96,16 +98,10 @@ export function Login() {
           <Button
             variant="outline"
             onClick={handleBackToLimit}
-            className="w-full"
+            className="w-full h-9"
           >
             戻る
           </Button>
-        </div>
-      </div>
-
-      <div className="mt-8 flex justify-center">
-        <div className="w-[80px] h-[64px]">
-          <img src="/ai.svg" alt="ai" />
         </div>
       </div>
     </div>
