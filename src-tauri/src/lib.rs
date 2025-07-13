@@ -7,8 +7,18 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_store::StoreExt;
 
+// AWS Cognito関連のimport
+use aws_config::meta::region::RegionProviderChain;
+use aws_sdk_cognitoidentityprovider::Client as CognitoClient;
+use uuid::Uuid;
+
 static GENERATION_LIMIT: u64 = 20;
 const API_URL: &str = dotenv!("API_URL");
+
+// AWS Cognito設定
+const AWS_REGION: &str = dotenv!("AWS_REGION");
+const COGNITO_USER_POOL_ID: &str = dotenv!("COGNITO_USER_POOL_ID");
+const COGNITO_CLIENT_ID: &str = dotenv!("COGNITO_CLIENT_ID");
 
 #[tauri::command]
 async fn convert_text(
