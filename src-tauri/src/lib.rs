@@ -7,10 +7,11 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_store::StoreExt;
 
-// AWS Cognito関連のimport
-use aws_config::meta::region::RegionProviderChain;
-use aws_sdk_cognitoidentityprovider::Client as CognitoClient;
-use uuid::Uuid;
+// AWS Cognito関連のimport (必要なものだけ残す)
+
+// Cognitoサービスモジュール
+mod cognito;
+use cognito::{CognitoService, SignUpResponse, SignInResponse, ConfirmSignUpResponse, CognitoError};
 
 static GENERATION_LIMIT: u64 = 20;
 const API_URL: &str = dotenv!("API_URL");
@@ -19,6 +20,44 @@ const API_URL: &str = dotenv!("API_URL");
 const AWS_REGION: &str = dotenv!("AWS_REGION");
 const COGNITO_USER_POOL_ID: &str = dotenv!("COGNITO_USER_POOL_ID");
 const COGNITO_CLIENT_ID: &str = dotenv!("COGNITO_CLIENT_ID");
+
+// Cognitoサービスのインスタンスを作成するヘルパー関数
+async fn create_cognito_service() -> Result<CognitoService, CognitoError> {
+    CognitoService::new(
+        COGNITO_USER_POOL_ID.to_string(),
+        COGNITO_CLIENT_ID.to_string()
+    ).await
+}
+
+// ユーザー登録用のTauriコマンド
+#[tauri::command]
+async fn register_user(email: String, password: String) -> Result<SignUpResponse, String> {
+    let cognito_service = create_cognito_service().await
+        .map_err(|e| format!("Cognitoサービスの初期化に失敗しました: {}", e))?;
+
+    cognito_service.sign_up(&email, &password).await
+        .map_err(|e| format!("ユーザー登録に失敗しました: {}", e))
+}
+
+// メール認証確認用のTauriコマンド
+#[tauri::command]
+async fn verify_email(email: String, confirmation_code: String) -> Result<ConfirmSignUpResponse, String> {
+    let cognito_service = create_cognito_service().await
+        .map_err(|e| format!("Cognitoサービスの初期化に失敗しました: {}", e))?;
+
+    cognito_service.confirm_sign_up(&email, &confirmation_code).await
+        .map_err(|e| format!("メール認証に失敗しました: {}", e))
+}
+
+// ログイン用のTauriコマンド
+#[tauri::command]
+async fn login_user(email: String, password: String) -> Result<SignInResponse, String> {
+    let cognito_service = create_cognito_service().await
+        .map_err(|e| format!("Cognitoサービスの初期化に失敗しました: {}", e))?;
+
+    cognito_service.sign_in(&email, &password).await
+        .map_err(|e| format!("ログインに失敗しました: {}", e))
+}
 
 #[tauri::command]
 async fn convert_text(
@@ -231,7 +270,7 @@ pub fn run() {
             println!("セットアップ完了");
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![convert_text, process_clipboard])
+        .invoke_handler(tauri::generate_handler![convert_text, process_clipboard, register_user, verify_email, login_user])
         .on_window_event(|window, event| {
             use tauri::WindowEvent;
             if let WindowEvent::CloseRequested { api, .. } = event {
