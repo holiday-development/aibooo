@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { useScreenType } from '@/contexts/use-screen-type';
 import { invoke } from '@tauri-apps/api/core';
+import { load } from '@tauri-apps/plugin-store';
 
 export function Register() {
   const [email, setEmail] = useState('');
@@ -49,14 +50,16 @@ export function Register() {
 
       console.log('Registration successful:', result);
 
+      // メールアドレスを認証用にストレージに保存
+      const store = await load('auth.json');
+      await store.set('pending_email', email);
+      await store.save();
+
       // 登録成功時の処理
       toast.success('アカウントを作成しました。メールを確認して認証を完了してください。');
 
-      // TODO: メール認証画面に遷移（Phase 7で実装予定）
-      // switchScreenType('EMAIL_VERIFICATION');
-
-      // 一時的にログイン画面に戻す
-      switchScreenType('LOGIN');
+      // メール認証画面に遷移
+      switchScreenType('EMAIL_VERIFICATION');
     } catch (error) {
       console.error('Register error:', error);
 

@@ -7,7 +7,7 @@ import {
   ReactNode,
 } from 'react';
 
-type ScreenType = 'MAIN' | 'LIMIT_EXCEEDED' | 'ONBOARDING' | 'LOGIN' | 'REGISTER';
+type ScreenType = 'MAIN' | 'LIMIT_EXCEEDED' | 'ONBOARDING' | 'LOGIN' | 'REGISTER' | 'EMAIL_VERIFICATION';
 
 const GENERATION_LIMIT = 20;
 
