@@ -4,6 +4,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { useScreenType } from '@/contexts/use-screen-type';
+import { invoke } from '@tauri-apps/api/core';
+import { load } from '@tauri-apps/plugin-store';
 
 export function Login() {
   const [email, setEmail] = useState('');
@@ -22,16 +24,42 @@ export function Login() {
     setIsLoading(true);
 
     try {
-      // TODO: Cognito認証の実装
-      // 現在は仮実装
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Cognito認証の実装
+      const result = await invoke('login_user', {
+        email: email,
+        password: password
+      }) as {
+        access_token: string;
+        refresh_token: string;
+        id_token: string;
+        token_type: string;
+        expires_in: number;
+      };
+
+      console.log('Login successful:', result);
+
+      // トークンを保存
+      const store = await load('auth.json');
+      await store.set('tokens', {
+        access_token: result.access_token,
+        refresh_token: result.refresh_token,
+        id_token: result.id_token,
+        token_type: result.token_type,
+        expires_in: result.expires_in,
+        expires_at: Date.now() + (result.expires_in * 1000),
+        user_email: email
+      });
+      await store.save();
 
       // 認証成功時の処理
       toast.success('ログインに成功しました');
       switchScreenType('MAIN');
     } catch (error) {
       console.error('Login error:', error);
-      toast.error('ログインに失敗しました');
+
+      // エラーメッセージを適切に表示
+      const errorMessage = typeof error === 'string' ? error : 'ログインに失敗しました';
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }

@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { useScreenType } from '@/contexts/use-screen-type';
+import { invoke } from '@tauri-apps/api/core';
 
 export function Register() {
   const [email, setEmail] = useState('');
@@ -33,16 +34,28 @@ export function Register() {
     setIsLoading(true);
 
     try {
-      // TODO: Cognito新規登録の実装
-      // 現在は仮実装
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Cognito新規登録の実装
+      const result = await invoke('register_user', {
+        email: email,
+        password: password
+      });
+
+      console.log('Registration successful:', result);
 
       // 登録成功時の処理
-      toast.success('アカウントを作成しました。ログインしてください。');
+      toast.success('アカウントを作成しました。メールを確認して認証を完了してください。');
+
+      // TODO: メール認証画面に遷移（Phase 7で実装予定）
+      // switchScreenType('EMAIL_VERIFICATION');
+
+      // 一時的にログイン画面に戻す
       switchScreenType('LOGIN');
     } catch (error) {
       console.error('Register error:', error);
-      toast.error('アカウントの作成に失敗しました');
+
+      // エラーメッセージを適切に表示
+      const errorMessage = typeof error === 'string' ? error : 'アカウントの作成に失敗しました';
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
