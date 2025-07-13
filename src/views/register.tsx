@@ -73,18 +73,18 @@ export function Register() {
   };
 
     return (
-    <div className="h-full w-full p-3 flex flex-col justify-center items-center">
-      <div className="w-full max-w-sm space-y-3">
-        <div className="text-center space-y-1">
-          <h1 className="text-xl font-bold">新規登録</h1>
-          <p className="text-xs text-muted-foreground">
+    <div className="h-full w-full p-4 flex flex-col justify-center items-center overflow-y-auto">
+      <div className="w-full max-w-sm space-y-4">
+        <div className="text-center space-y-2">
+          <h1 className="text-2xl font-bold">新規登録</h1>
+          <p className="text-sm text-muted-foreground">
             プレミアムプランのアカウントを作成して無制限でご利用いただけます
           </p>
         </div>
 
-        <form onSubmit={handleRegister} className="space-y-2">
-          <div className="space-y-1">
-            <Label htmlFor="email" className="text-xs">メールアドレス</Label>
+        <form onSubmit={handleRegister} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email" className="text-sm">メールアドレス</Label>
             <Input
               id="email"
               type="email"
@@ -92,12 +92,12 @@ export function Register() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="h-8"
+              className="h-10"
             />
           </div>
 
-          <div className="space-y-1">
-            <Label htmlFor="password" className="text-xs">パスワード</Label>
+          <div className="space-y-2">
+            <Label htmlFor="password" className="text-sm">パスワード</Label>
             <Input
               id="password"
               type="password"
@@ -105,15 +105,15 @@ export function Register() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="h-8"
+              className="h-10"
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground leading-tight">
               パスワードは8文字以上で、大文字・小文字・数字・特殊文字を含む必要があります
             </p>
           </div>
 
-          <div className="space-y-1">
-            <Label htmlFor="confirmPassword" className="text-xs">パスワード（確認）</Label>
+          <div className="space-y-2">
+            <Label htmlFor="confirmPassword" className="text-sm">パスワード（確認）</Label>
             <Input
               id="confirmPassword"
               type="password"
@@ -121,23 +121,23 @@ export function Register() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
-              className="h-8"
+              className="h-10"
             />
           </div>
 
           <Button
             type="submit"
-            className="w-full h-8 mt-3"
+            className="w-full h-10"
             disabled={isLoading}
           >
             {isLoading ? 'アカウント作成中...' : 'アカウントを作成'}
           </Button>
         </form>
 
-        <div className="text-center space-y-1">
-          <p className="text-xs text-muted-foreground">
+        <div className="text-center space-y-3">
+          <p className="text-sm text-muted-foreground">
             すでにアカウントをお持ちの場合は、
-            <Button variant="link" className="p-0 h-auto text-xs" onClick={handleBackToLogin}>
+            <Button variant="link" className="p-0 h-auto text-sm underline ml-1" onClick={handleBackToLogin}>
               ログイン
             </Button>
           </p>
@@ -145,7 +145,7 @@ export function Register() {
           <Button
             variant="outline"
             onClick={handleBackToLogin}
-            className="w-full h-8"
+            className="w-full h-10"
           >
             戻る
           </Button>
