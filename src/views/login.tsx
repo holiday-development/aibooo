@@ -41,6 +41,10 @@ export function Login() {
     switchScreenType('LIMIT_EXCEEDED');
   };
 
+  const handleRegisterClick = () => {
+    switchScreenType('REGISTER');
+  };
+
     return (
     <div className="h-full w-full p-4 flex flex-col justify-center items-center">
       <div className="w-full max-w-sm space-y-4">
@@ -90,7 +94,7 @@ export function Login() {
         <div className="text-center space-y-2">
           <p className="text-xs text-muted-foreground">
             アカウントをお持ちでない場合は、
-            <Button variant="link" className="p-0 h-auto text-xs">
+            <Button variant="link" className="p-0 h-auto text-xs" onClick={handleRegisterClick}>
               新規登録
             </Button>
           </p>
