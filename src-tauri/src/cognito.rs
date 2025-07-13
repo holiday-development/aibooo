@@ -129,6 +129,8 @@ impl CognitoService {
     }
 
     pub async fn confirm_sign_up(&self, email: &str, confirmation_code: &str) -> Result<ConfirmSignUpResponse, CognitoError> {
+        println!("Starting confirm_sign_up for email: {}", email);
+
         let _result = self
             .client
             .confirm_sign_up()
@@ -137,14 +139,34 @@ impl CognitoService {
             .confirmation_code(confirmation_code)
             .send()
             .await
-            .map_err(|e| CognitoError {
-                error_type: "confirm_sign_up_error".to_string(),
-                message: format!("メール認証に失敗しました: {}", e),
+            .map_err(|e| {
+                println!("Cognito confirm_sign_up error: {:?}", e);
+
+                // エラーメッセージをユーザーフレンドリーに変換
+                let error_string = format!("{:?}", e);
+                let user_message = if error_string.contains("CodeMismatchException") {
+                    "確認コードが正しくありません。もう一度確認してください。"
+                } else if error_string.contains("ExpiredCodeException") {
+                    "確認コードの有効期限が切れています。新規登録からやり直してください。"
+                } else if error_string.contains("UserNotFoundException") {
+                    "ユーザーが見つかりません。メールアドレスを確認してください。"
+                } else if error_string.contains("LimitExceededException") {
+                    "試行回数が上限に達しました。しばらく時間をおいてから再度お試しください。"
+                } else {
+                    "メール認証に失敗しました。確認コードとメールアドレスを確認してください。"
+                };
+
+                CognitoError {
+                    error_type: "confirm_sign_up_error".to_string(),
+                    message: user_message.to_string(),
+                }
             })?;
+
+        println!("Confirm sign up successful");
 
         Ok(ConfirmSignUpResponse {
             success: true,
-            message: "メール認証が完了しました".to_string(),
+            message: "メール認証が完了しました。".to_string(),
         })
     }
 
