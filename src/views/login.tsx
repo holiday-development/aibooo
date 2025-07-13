@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,6 +12,25 @@ export function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const { switchScreenType } = useScreenType();
   const { login } = useAuth();
+
+  // コンポーネントマウント時に保存されたメールアドレスを読み込み
+  useEffect(() => {
+    const loadSavedEmail = async () => {
+      try {
+        const { load } = await import('@tauri-apps/plugin-store');
+        const store = await load('auth.json');
+        const pendingEmail = await store.get('pending_email');
+        if (pendingEmail && typeof pendingEmail === 'string') {
+          setEmail(pendingEmail);
+        }
+      } catch (error) {
+        // エラーは無視（初回起動など）
+        console.log('No saved email found or failed to load:', error);
+      }
+    };
+
+    loadSavedEmail();
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,7 +48,30 @@ export function Login() {
       switchScreenType('MAIN');
     } catch (error) {
       console.error('Login error:', error);
-      toast.error('ログインに失敗しました');
+
+      const errorMessage = typeof error === 'string' ? error : 'ログインに失敗しました';
+
+      // メール認証が必要な場合の処理
+      if (errorMessage.includes('メール認証が完了していません')) {
+        toast.error(errorMessage);
+
+        // メールアドレスを認証用にストレージに保存
+        try {
+          const { load } = await import('@tauri-apps/plugin-store');
+          const store = await load('auth.json');
+          await store.set('pending_email', email);
+          await store.save();
+
+          // メール認証画面に遷移
+          setTimeout(() => {
+            switchScreenType('EMAIL_VERIFICATION');
+          }, 2000); // 2秒後に遷移
+        } catch (storeError) {
+          console.error('Failed to save email for verification:', storeError);
+        }
+      } else {
+        toast.error(errorMessage);
+      }
     } finally {
       setIsLoading(false);
     }

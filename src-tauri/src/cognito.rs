@@ -171,6 +171,8 @@ impl CognitoService {
     }
 
     pub async fn sign_in(&self, email: &str, password: &str) -> Result<SignInResponse, CognitoError> {
+        println!("Starting sign_in for email: {}", email);
+
         let mut auth_parameters = HashMap::new();
         auth_parameters.insert("USERNAME".to_string(), email.to_string());
         auth_parameters.insert("PASSWORD".to_string(), password.to_string());
@@ -183,9 +185,33 @@ impl CognitoService {
             .set_auth_parameters(Some(auth_parameters))
             .send()
             .await
-            .map_err(|e| CognitoError {
-                error_type: "sign_in_error".to_string(),
-                message: format!("ログインに失敗しました: {}", e),
+            .map_err(|e| {
+                println!("Cognito sign_in error: {:?}", e);
+
+                // エラーメッセージをユーザーフレンドリーに変換
+                let error_string = format!("{:?}", e);
+                let user_message = if error_string.contains("UserNotConfirmedException") {
+                    "メール認証が完了していません。メールを確認して認証を完了してください。"
+                } else if error_string.contains("NotAuthorizedException") {
+                    "メールアドレスまたはパスワードが正しくありません。"
+                } else if error_string.contains("UserNotFoundException") {
+                    "このメールアドレスは登録されていません。"
+                } else if error_string.contains("TooManyFailedAttemptsException") {
+                    "ログイン試行回数が上限に達しました。しばらく時間をおいてから再度お試しください。"
+                } else if error_string.contains("Auth flow not enabled") || error_string.contains("USER_PASSWORD_AUTH") {
+                    "認証設定に問題があります。AWS CognitoでALLOW_USER_PASSWORD_AUTHを有効にしてください。"
+                } else {
+                    "ログインに失敗しました。メールアドレスとパスワードを確認してください。"
+                };
+
+                CognitoError {
+                    error_type: if error_string.contains("UserNotConfirmedException") {
+                        "user_not_confirmed".to_string()
+                    } else {
+                        "sign_in_error".to_string()
+                    },
+                    message: user_message.to_string(),
+                }
             })?;
 
         let auth_result = result.authentication_result()
@@ -198,31 +224,34 @@ impl CognitoService {
             .ok_or_else(|| CognitoError {
                 error_type: "token_error".to_string(),
                 message: "アクセストークンが取得できませんでした".to_string(),
-            })?;
+            })?.to_string();
 
         let refresh_token = auth_result.refresh_token()
             .ok_or_else(|| CognitoError {
                 error_type: "token_error".to_string(),
                 message: "リフレッシュトークンが取得できませんでした".to_string(),
-            })?;
+            })?.to_string();
 
         let id_token = auth_result.id_token()
             .ok_or_else(|| CognitoError {
                 error_type: "token_error".to_string(),
                 message: "IDトークンが取得できませんでした".to_string(),
-            })?;
+            })?.to_string();
 
         let token_type = auth_result.token_type()
-            .unwrap_or_default();
+            .unwrap_or_default()
+            .to_string();
 
-        let expires_in_value = auth_result.expires_in();
+        let expires_in = auth_result.expires_in();
+
+        println!("Sign in successful");
 
         Ok(SignInResponse {
-            access_token: access_token.to_string(),
-            refresh_token: refresh_token.to_string(),
-            id_token: id_token.to_string(),
-            token_type: token_type.to_string(),
-            expires_in: expires_in_value,
+            access_token,
+            refresh_token,
+            id_token,
+            token_type,
+            expires_in,
         })
     }
 }
