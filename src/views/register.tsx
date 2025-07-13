@@ -31,6 +31,13 @@ export function Register() {
       return;
     }
 
+    // AWS Cognitoのパスワードポリシーチェック
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/;
+    if (!passwordRegex.test(password)) {
+      toast.error('パスワードは大文字、小文字、数字、特殊文字を含む必要があります');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -100,6 +107,9 @@ export function Register() {
               required
               className="h-8"
             />
+            <p className="text-xs text-muted-foreground">
+              パスワードは8文字以上で、大文字・小文字・数字・特殊文字を含む必要があります
+            </p>
           </div>
 
           <div className="space-y-1">
