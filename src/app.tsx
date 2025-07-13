@@ -1,5 +1,6 @@
 import { LimitExceeded } from '@/views/limit-exceeeded';
 import { Generator } from '@/views/generator';
+import { Login } from '@/views/login';
 import { useCallback, useEffect } from 'react';
 import { useScreenType } from '@/contexts/use-screen-type';
 import { Onboarding } from '@/views/onboarding';
@@ -22,6 +23,8 @@ export default function App() {
         return <Generator />;
       case 'LIMIT_EXCEEDED':
         return <LimitExceeded />;
+      case 'LOGIN':
+        return <Login />;
       default:
         return <Generator />;
     }
