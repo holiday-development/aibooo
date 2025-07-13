@@ -51,14 +51,20 @@ pub struct CognitoService {
 
 impl CognitoService {
     pub async fn new(user_pool_id: String, client_id: String) -> Result<Self, CognitoError> {
+        println!("Initializing CognitoService...");
+        println!("User Pool ID: {}", user_pool_id);
+        println!("Client ID: {}", client_id);
+
         // AWS SDKは環境変数からregionを自動的に取得するため、手動設定は不要
         let config = aws_config::from_env()
             .load()
             .await;
+        println!("AWS config loaded successfully");
 
         let client = CognitoClient::new(&config);
+        println!("Cognito client created successfully");
 
-        Ok(Self {
+        Ok(CognitoService {
             client,
             user_pool_id,
             client_id,
@@ -66,10 +72,14 @@ impl CognitoService {
     }
 
     pub async fn sign_up(&self, email: &str, password: &str) -> Result<SignUpResponse, CognitoError> {
+        println!("Starting sign_up for email: {}", email);
+
         let email_attribute = AttributeType::builder()
             .name("email")
             .value(email)
             .build();
+
+        println!("Built email attribute, sending request to Cognito...");
 
         let result = self
             .client
@@ -80,10 +90,28 @@ impl CognitoService {
             .user_attributes(email_attribute)
             .send()
             .await
-            .map_err(|e| CognitoError {
-                error_type: "sign_up_error".to_string(),
-                message: format!("ユーザー登録に失敗しました: {}", e),
+            .map_err(|e| {
+                println!("Cognito sign_up error: {:?}", e);
+
+                // エラーメッセージをユーザーフレンドリーに変換
+                let error_string = format!("{:?}", e);
+                let user_message = if error_string.contains("InvalidPasswordException") {
+                    "パスワードが要件を満たしていません。大文字、小文字、数字、特殊文字を含む8文字以上のパスワードを入力してください。"
+                } else if error_string.contains("UsernameExistsException") {
+                    "このメールアドレスは既に登録されています。"
+                } else if error_string.contains("InvalidParameterException") {
+                    "入力内容に問題があります。メールアドレスとパスワードを確認してください。"
+                } else {
+                    "ユーザー登録に失敗しました。しばらく時間をおいてから再度お試しください。"
+                };
+
+                CognitoError {
+                    error_type: "sign_up_error".to_string(),
+                    message: user_message.to_string(),
+                }
             })?;
+
+        println!("Sign up successful, processing response...");
 
         let user_sub = result.user_sub().unwrap_or_default().to_string();
         let code_delivery_medium = result.code_delivery_details()
