@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { useScreenType } from '@/contexts/use-screen-type';
+import { useAuth } from '@/contexts/use-auth';
 import { invoke } from '@tauri-apps/api/core';
 import { load } from '@tauri-apps/plugin-store';
 
@@ -13,6 +14,7 @@ export function EmailVerification() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingEmail, setIsLoadingEmail] = useState(true);
   const { switchScreenType } = useScreenType();
+  const { checkAuthStatus } = useAuth();
 
   // コンポーネントマウント時に登録時のメールアドレスを取得
   useEffect(() => {
@@ -49,20 +51,65 @@ export function EmailVerification() {
     setIsLoading(true);
 
     try {
-      const result = await invoke('verify_email', {
-        email: email,
-        confirmationCode: confirmationCode
+      // 保存されたパスワードを取得
+      const store = await load('auth.json');
+      const tempPassword = await store.get('temp_password') as string;
+
+      if (!tempPassword) {
+        toast.error('保存されたパスワード情報が見つかりません。新規登録からやり直してください。');
+        switchScreenType('REGISTER');
+        return;
+      }
+
+      // パスワードをデコード
+      const password = atob(tempPassword);
+
+      // メール認証と同時に認証トークンを取得
+      const authResult = await invoke<{
+        access_token: string;
+        id_token: string;
+        refresh_token: string;
+        expires_in: number;
+      }>('verify_email_and_login', {
+        request: {
+          email,
+          password,
+          confirmation_code: confirmationCode
+        }
       });
 
-      console.log('Email verification successful:', result);
+      console.log('Email verification and login successful:', authResult);
 
-      // 認証成功時に一時的なメールアドレスをクリア
-      const store = await load('auth.json');
-      await store.delete('pending_email');
-      await store.save();
+      // 認証トークンを保存
+      if (authResult.access_token && authResult.id_token && authResult.refresh_token) {
+        const expiresAt = Date.now() + (authResult.expires_in * 1000);
 
-      toast.success('メール認証が完了しました。ログイン画面に移動します。');
-      switchScreenType('LOGIN');
+        const authTokens = {
+          access_token: authResult.access_token,
+          id_token: authResult.id_token,
+          refresh_token: authResult.refresh_token,
+          token_type: 'Bearer',
+          expires_in: authResult.expires_in,
+          expires_at: expiresAt,
+          user_email: email
+        };
+
+        await store.set('auth', authTokens);
+        // 一時的なデータを削除
+        await store.delete('pending_email');
+        await store.delete('temp_password');
+        await store.save();
+
+        toast.success('メール認証が完了しました。');
+
+        // 認証状態を更新
+        await checkAuthStatus();
+
+        // MAIN画面に遷移
+        switchScreenType('MAIN');
+      } else {
+        throw new Error('認証トークンの取得に失敗しました');
+      }
     } catch (error) {
       console.error('Email verification error:', error);
 

@@ -53,6 +53,8 @@ export function Register() {
       // メールアドレスを認証用にストレージに保存
       const store = await load('auth.json');
       await store.set('pending_email', email);
+      // パスワードを一時的に暗号化して保存（メール認証後の自動ログイン用）
+      await store.set('temp_password', btoa(password));
       await store.save();
 
       // 登録成功時の処理

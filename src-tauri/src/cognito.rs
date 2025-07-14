@@ -254,4 +254,15 @@ impl CognitoService {
             expires_in,
         })
     }
+
+    // メール認証完了後に直接サインインを行う
+    pub async fn confirm_sign_up_and_sign_in(&self, email: &str, password: &str, confirmation_code: &str) -> Result<SignInResponse, CognitoError> {
+        println!("Starting confirm_sign_up_and_sign_in for email: {}", email);
+
+        // 最初にメール認証を完了
+        self.confirm_sign_up(email, confirmation_code).await?;
+
+        // メール認証成功後、直接サインインを実行
+        self.sign_in(email, password).await
+    }
 }

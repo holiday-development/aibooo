@@ -59,6 +59,23 @@ async fn login_user(email: String, password: String) -> Result<SignInResponse, S
         .map_err(|e| format!("ログインに失敗しました: {}", e))
 }
 
+// メール認証とログインを同時に行うコマンド
+#[derive(serde::Deserialize)]
+struct VerifyEmailAndLoginRequest {
+    email: String,
+    password: String,
+    confirmation_code: String,
+}
+
+#[tauri::command]
+async fn verify_email_and_login(request: VerifyEmailAndLoginRequest) -> Result<SignInResponse, String> {
+    let cognito_service = create_cognito_service().await
+        .map_err(|e| format!("Cognitoサービスの初期化に失敗しました: {}", e))?;
+
+    cognito_service.confirm_sign_up_and_sign_in(&request.email, &request.password, &request.confirmation_code).await
+        .map_err(|e| format!("メール認証とログインに失敗しました: {}", e))
+}
+
 // 認証状態をチェックするヘルパー関数
 fn is_user_authenticated(app_handle: &tauri::AppHandle) -> bool {
     let store = match app_handle.store("auth.json") {
@@ -298,7 +315,7 @@ pub fn run() {
             println!("セットアップ完了");
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![convert_text, process_clipboard, register_user, verify_email, login_user])
+        .invoke_handler(tauri::generate_handler![convert_text, process_clipboard, register_user, verify_email, login_user, verify_email_and_login])
         .on_window_event(|window, event| {
             use tauri::WindowEvent;
             if let WindowEvent::CloseRequested { api, .. } = event {
