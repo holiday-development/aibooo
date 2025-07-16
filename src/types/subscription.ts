@@ -14,8 +14,6 @@ export interface SubscriptionStatus {
   is_active: boolean;
   days_remaining: number;
   expires_at: string | null;
-  today_usage: number;
-  max_daily_usage: number;
 }
 
 export interface SubscriptionPlan {

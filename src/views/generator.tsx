@@ -120,40 +120,19 @@ export function Generator() {
   return (
     <>
       <div className="flex flex-col gap-2 w-full">
-        {/* サブスクリプション状態表示 */}
-        <div className="flex items-center justify-between">
-          <Select value={convertType} onValueChange={onConvertTypeChange}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="校閲する" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="translate">翻訳する</SelectItem>
-              <SelectItem value="revision">校閲する</SelectItem>
-              <SelectItem value="summarize">まとめる</SelectItem>
-              <SelectItem value="formalize">礼儀正しくする</SelectItem>
-              <SelectItem value="heartful">優しくする</SelectItem>
-              <SelectItem value="spark">独創的にする</SelectItem>
-            </SelectContent>
-          </Select>
-
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            {isActive && <Crown className="h-4 w-4 text-yellow-500" />}
-            <span className="hidden sm:inline">
-              {isActive && subscription
-                ? `${subscription.plan_type === 'weekly' ? '週額プラン' : '月額プラン'}（残り${subscription.days_remaining}日）`
-                : `今日の利用: ${subscription?.today_usage || 0}/20回`
-              }
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => switchScreenType('SUBSCRIPTION')}
-              className="ml-2"
-            >
-              {isActive ? 'プラン管理' : 'プレミアム'}
-            </Button>
-          </div>
-        </div>
+                <Select value={convertType} onValueChange={onConvertTypeChange}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="校閲する" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="translate">翻訳する</SelectItem>
+            <SelectItem value="revision">校閲する</SelectItem>
+            <SelectItem value="summarize">まとめる</SelectItem>
+            <SelectItem value="formalize">礼儀正しくする</SelectItem>
+            <SelectItem value="heartful">優しくする</SelectItem>
+            <SelectItem value="spark">独創的にする</SelectItem>
+          </SelectContent>
+        </Select>
         <MaxLengthTextarea
           maxLength={MAX_LENGTH}
           value={inputText}
@@ -163,19 +142,34 @@ export function Generator() {
         />
       </div>
       <div className="flex flex-col gap-2 w-full items-start">
-        <Button
-          variant="ghost"
-          onClick={convertText}
-          disabled={isDisabledConvertTextButton}
-          className="flex items-center gap-2"
-        >
-          {isProcessing ? (
-            <RefreshCcw className="size-4 animate-spin" />
-          ) : (
-            <RefreshCcw className="size-4" />
-          )}
-          {isProcessing ? '変換中...' : '変換する'}
-        </Button>
+        <div className="flex items-center justify-between w-full">
+          <Button
+            variant="ghost"
+            onClick={convertText}
+            disabled={isDisabledConvertTextButton}
+            className="flex items-center gap-2"
+          >
+            {isProcessing ? (
+              <RefreshCcw className="size-4 animate-spin" />
+            ) : (
+              <RefreshCcw className="size-4" />
+            )}
+            {isProcessing ? '変換中...' : '変換する'}
+          </Button>
+
+          <div className="flex items-center gap-2">
+            {isActive && (
+                <Crown className="h-4 w-4 text-yellow-500" />
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => switchScreenType('SUBSCRIPTION')}
+            >
+              {isActive ? 'プラン管理' : 'プレミアムを試す'}
+            </Button>
+          </div>
+        </div>
         <ClipboardTextarea
           copyable={true}
           value={outputText}
