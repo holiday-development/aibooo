@@ -1,6 +1,8 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-use chrono::Local;
+use chrono::{Local, DateTime, Utc};
 use dotenvy_macro::dotenv;
+use serde::{Deserialize, Serialize};
+use sha2::{Sha256, Digest};
 use std::env;
 use tauri::{App, AppHandle, Emitter, Manager};
 use tauri_plugin_clipboard_manager::ClipboardExt;
@@ -9,6 +11,189 @@ use tauri_plugin_store::StoreExt;
 
 static GENERATION_LIMIT: u64 = 20;
 const API_URL: &str = dotenv!("API_URL");
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SubscriptionInfo {
+    plan_type: String,
+    expires_at: Option<String>,
+    stripe_customer_id: Option<String>,
+    verification_token: Option<String>,
+    purchased_at: Option<String>,
+    checksum: Option<String>, // 整合性チェック用
+}
+
+impl Default for SubscriptionInfo {
+    fn default() -> Self {
+        Self {
+            plan_type: "free".to_string(),
+            expires_at: None,
+            stripe_customer_id: None,
+            verification_token: None,
+            purchased_at: None,
+            checksum: None,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct SubscriptionStatus {
+    plan_type: String,
+    is_active: bool,
+    days_remaining: i64,
+    expires_at: Option<String>,
+    today_usage: u64,
+    max_daily_usage: u64,
+}
+
+// サブスクリプション情報のチェックサムを計算
+fn calculate_subscription_checksum(subscription: &SubscriptionInfo) -> String {
+    let data = format!(
+        "{}|{}|{}|{}|{}",
+        subscription.plan_type,
+        subscription.expires_at.as_deref().unwrap_or(""),
+        subscription.stripe_customer_id.as_deref().unwrap_or(""),
+        subscription.verification_token.as_deref().unwrap_or(""),
+        subscription.purchased_at.as_deref().unwrap_or("")
+    );
+
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    let result = hasher.finalize();
+    format!("{:x}", result)
+}
+
+// サブスクリプション情報の整合性を検証
+fn validate_subscription_integrity(subscription: &SubscriptionInfo) -> bool {
+    if subscription.plan_type == "free" {
+        return true; // 無料プランは常に有効
+    }
+
+    if let Some(stored_checksum) = &subscription.checksum {
+        let calculated_checksum = calculate_subscription_checksum(subscription);
+        return stored_checksum == &calculated_checksum;
+    }
+
+    false // チェックサムがない場合は無効
+}
+
+// チェックサム付きでサブスクリプション情報を作成
+fn create_subscription_with_checksum(
+    plan_type: String,
+    expires_at: Option<String>,
+    stripe_customer_id: Option<String>,
+    verification_token: Option<String>,
+    purchased_at: Option<String>,
+) -> SubscriptionInfo {
+    let mut subscription = SubscriptionInfo {
+        plan_type,
+        expires_at,
+        stripe_customer_id,
+        verification_token,
+        purchased_at,
+        checksum: None,
+    };
+
+    subscription.checksum = Some(calculate_subscription_checksum(&subscription));
+    subscription
+}
+
+fn get_subscription_from_store(app_handle: &AppHandle) -> Result<SubscriptionInfo, String> {
+    let store = app_handle.store("usage.json").map_err(|e| {
+        format!("Store access error: {}", e)
+    })?;
+
+    if let Some(sub_value) = store.get("subscription") {
+        if let Ok(subscription) = serde_json::from_value::<SubscriptionInfo>(sub_value.clone()) {
+            return Ok(subscription);
+        }
+    }
+
+    Ok(SubscriptionInfo::default())
+}
+
+fn save_subscription_to_store(app_handle: &AppHandle, subscription: &SubscriptionInfo) -> Result<(), String> {
+    let store = app_handle.store("usage.json").map_err(|e| {
+        format!("Store access error: {}", e)
+    })?;
+
+    let sub_value = serde_json::to_value(subscription).map_err(|e| {
+        format!("Serialization error: {}", e)
+    })?;
+
+    store.set("subscription", sub_value);
+    store.save().map_err(|e| {
+        format!("Store save error: {}", e)
+    })?;
+
+    Ok(())
+}
+
+fn is_subscription_active(subscription: &SubscriptionInfo) -> bool {
+    if subscription.plan_type == "free" {
+        return false;
+    }
+
+    // チェックサム検証
+    if !validate_subscription_integrity(subscription) {
+        println!("Invalid subscription: checksum validation failed");
+        return false;
+    }
+
+    // 必要なフィールドの整合性チェック
+    if subscription.stripe_customer_id.is_none() || subscription.purchased_at.is_none() {
+        println!("Invalid subscription: missing required fields");
+        return false;
+    }
+
+    if let Some(expires_str) = &subscription.expires_at {
+        if let Ok(expires_time) = DateTime::parse_from_rfc3339(expires_str) {
+            let now = Utc::now();
+            if expires_time > now {
+                // 購入日のチェック
+                if let Some(purchased_str) = &subscription.purchased_at {
+                    if let Ok(purchased_time) = DateTime::parse_from_rfc3339(purchased_str) {
+                        // 購入日が現在より未来でないかチェック
+                        if purchased_time <= now {
+                            return true;
+                        } else {
+                            println!("Invalid subscription: purchased_at is in the future");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    false
+}
+
+fn get_days_remaining(subscription: &SubscriptionInfo) -> i64 {
+    if let Some(expires_str) = &subscription.expires_at {
+        if let Ok(expires_time) = DateTime::parse_from_rfc3339(expires_str) {
+            let now = Utc::now();
+            let diff = expires_time.signed_duration_since(now);
+            return diff.num_days().max(0);
+        }
+    }
+    0
+}
+
+fn get_today_usage_count(app_handle: &AppHandle) -> Result<u64, String> {
+    let store = app_handle.store("usage.json").map_err(|e| {
+        format!("Store access error: {}", e)
+    })?;
+
+    let today = Local::now().format("%Y-%m-%d").to_string();
+    let request_count = store
+        .get("request_count")
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default();
+
+    Ok(request_count
+        .get(&today)
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0))
+}
 
 #[tauri::command]
 async fn convert_text(
@@ -20,27 +205,35 @@ async fn convert_text(
     let store = app_handle.store("usage.json").map_err(|e| {
         serde_json::json!({"type": "store_error", "message": e.to_string()}).to_string()
     })?;
-    let today = Local::now().format("%Y-%m-%d").to_string();
-    let mut request_count = store
-        .get("request_count")
-        .and_then(|v| v.as_object().cloned())
-        .unwrap_or_default();
-    let count = request_count
-        .get(&today)
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0);
-    if count >= GENERATION_LIMIT {
-        return Err(serde_json::json!({
-            "type": "limit_exceeded",
-            "message": format!("本日の利用回数上限（{}回）に達しました", GENERATION_LIMIT)
-        })
-        .to_string());
+
+        // サブスクリプション状態を確認
+    let subscription = get_subscription_from_store(&app_handle)?;
+    let has_active_subscription = is_subscription_active(&subscription);
+
+    // プレミアム会員以外は回数制限をチェック
+    if !has_active_subscription {
+        let today = Local::now().format("%Y-%m-%d").to_string();
+        let mut request_count = store
+            .get("request_count")
+            .and_then(|v| v.as_object().cloned())
+            .unwrap_or_default();
+        let count = request_count
+            .get(&today)
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        if count >= GENERATION_LIMIT {
+            return Err(serde_json::json!({
+                "type": "limit_exceeded",
+                "message": format!("本日の利用回数上限（{}回）に達しました", GENERATION_LIMIT)
+            })
+            .to_string());
+        }
+        request_count.insert(today.clone(), serde_json::json!(count + 1));
+        store.set("request_count", serde_json::json!(request_count));
+        store.save().map_err(|e| {
+            serde_json::json!({"type": "store_error", "message": e.to_string()}).to_string()
+        })?;
     }
-    request_count.insert(today.clone(), serde_json::json!(count + 1));
-    store.set("request_count", serde_json::json!(request_count));
-    store.save().map_err(|e| {
-        serde_json::json!({"type": "store_error", "message": e.to_string()}).to_string()
-    })?;
 
     println!(
         "convert_text関数が呼び出されました: テキスト長さ {}",
@@ -157,6 +350,82 @@ async fn process_clipboard_internal(app: AppHandle) -> Result<(String, String), 
     Ok((clipboard_text, improved_text))
 }
 
+// サブスクリプション状態を取得
+#[tauri::command]
+async fn get_subscription_status(app_handle: AppHandle) -> Result<SubscriptionStatus, String> {
+    let subscription = get_subscription_from_store(&app_handle)?;
+    let is_active = is_subscription_active(&subscription);
+    let days_remaining = get_days_remaining(&subscription);
+    let today_usage = get_today_usage_count(&app_handle)?;
+
+    Ok(SubscriptionStatus {
+        plan_type: subscription.plan_type,
+        is_active,
+        days_remaining,
+        expires_at: subscription.expires_at,
+        today_usage,
+        max_daily_usage: GENERATION_LIMIT,
+    })
+}
+
+// サブスクリプション情報を更新
+#[tauri::command]
+async fn update_subscription(
+    plan_type: String,
+    stripe_customer_id: String,
+    verification_token: Option<String>,
+    app_handle: AppHandle,
+) -> Result<SubscriptionStatus, String> {
+    // 期限を計算
+    let duration_days = match plan_type.as_str() {
+        "weekly" => 7,
+        "monthly" => 30,
+        _ => return Err("Invalid plan type".to_string()),
+    };
+
+    let expires_at = Utc::now() + chrono::Duration::days(duration_days);
+    let expires_str = expires_at.to_rfc3339();
+    let purchased_at = Utc::now().to_rfc3339();
+
+    let subscription = create_subscription_with_checksum(
+        plan_type.clone(),
+        Some(expires_str),
+        Some(stripe_customer_id),
+        verification_token,
+        Some(purchased_at),
+    );
+
+    save_subscription_to_store(&app_handle, &subscription)?;
+
+    // 更新された状態を返す
+    get_subscription_status(app_handle).await
+}
+
+// サブスクリプションをリセット（無料プランに戻す）
+#[tauri::command]
+async fn reset_subscription(app_handle: AppHandle) -> Result<SubscriptionStatus, String> {
+    let default_subscription = SubscriptionInfo::default();
+    save_subscription_to_store(&app_handle, &default_subscription)?;
+
+    // リセット後の状態を返す
+    get_subscription_status(app_handle).await
+}
+
+// サブスクリプションの有効性をチェック（期限切れの場合は自動リセット）
+#[tauri::command]
+async fn check_subscription_validity(app_handle: AppHandle) -> Result<SubscriptionStatus, String> {
+    let mut subscription = get_subscription_from_store(&app_handle)?;
+
+    // 期限切れチェック
+    if subscription.plan_type != "free" && !is_subscription_active(&subscription) {
+        println!("Subscription expired, resetting to free plan");
+        subscription = SubscriptionInfo::default();
+        save_subscription_to_store(&app_handle, &subscription)?;
+    }
+
+    get_subscription_status(app_handle).await
+}
+
 // アプリの初期化時にショートカットを設定
 fn setup_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     println!("ショートカット設定を開始");
@@ -221,7 +490,14 @@ pub fn run() {
             println!("セットアップ完了");
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![convert_text, process_clipboard])
+        .invoke_handler(tauri::generate_handler![
+            convert_text,
+            process_clipboard,
+            get_subscription_status,
+            update_subscription,
+            reset_subscription,
+            check_subscription_validity
+        ])
         .on_window_event(|window, event| {
             use tauri::WindowEvent;
             if let WindowEvent::CloseRequested { api, .. } = event {

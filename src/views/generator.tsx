@@ -16,6 +16,8 @@ import { MaxLengthTextarea } from '@/components/ui/max-length-textarea';
 import { toast } from 'sonner';
 import { load } from '@tauri-apps/plugin-store';
 import { useScreenType } from '@/contexts/use-screen-type';
+import { useSubscription } from '@/contexts/use-subscription';
+import { Crown } from 'lucide-react';
 
 const MAX_LENGTH = 1000;
 
@@ -33,13 +35,18 @@ export function Generator() {
   const isDisabledConvertTextButton = isOverflow || inputText.length === 0;
   const [isProcessing, setIsProcessing] = useState(false);
   const [convertType, setConvertType] = useState<ConvertType>('translate');
+
   const { switchScreenType } = useScreenType();
+  const { subscription } = useSubscription();
+  const isActive = subscription?.is_active || false;
 
   async function loadConvertTypeStore() {
     const store = await load('usage.json');
     const convertType = store.get('convert_type');
     return convertType;
   }
+
+
 
   async function onConvertTypeChange(value: ConvertType) {
     setConvertType(value);
@@ -64,7 +71,9 @@ export function Generator() {
         text: originalText,
         type: convertTypeFromStore,
       })
-        .then(setOutputText)
+        .then((result) => {
+          setOutputText(result);
+        })
         .catch((error) => {
           const errObj = JSON.parse(error as string);
           if (errObj.type === 'limit_exceeded') {
@@ -89,7 +98,7 @@ export function Generator() {
         text: inputText,
         type: convertType,
       });
-      setOutputText(converted);
+            setOutputText(converted);
     } catch (error) {
       const errObj = JSON.parse(error as string);
       if (errObj.type === 'limit_exceeded') {
@@ -111,19 +120,40 @@ export function Generator() {
   return (
     <>
       <div className="flex flex-col gap-2 w-full">
-        <Select value={convertType} onValueChange={onConvertTypeChange}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="校閲する" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="translate">翻訳する</SelectItem>
-            <SelectItem value="revision">校閲する</SelectItem>
-            <SelectItem value="summarize">まとめる</SelectItem>
-            <SelectItem value="formalize">礼儀正しくする</SelectItem>
-            <SelectItem value="heartful">優しくする</SelectItem>
-            <SelectItem value="spark">独創的にする</SelectItem>
-          </SelectContent>
-        </Select>
+        {/* サブスクリプション状態表示 */}
+        <div className="flex items-center justify-between">
+          <Select value={convertType} onValueChange={onConvertTypeChange}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="校閲する" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="translate">翻訳する</SelectItem>
+              <SelectItem value="revision">校閲する</SelectItem>
+              <SelectItem value="summarize">まとめる</SelectItem>
+              <SelectItem value="formalize">礼儀正しくする</SelectItem>
+              <SelectItem value="heartful">優しくする</SelectItem>
+              <SelectItem value="spark">独創的にする</SelectItem>
+            </SelectContent>
+          </Select>
+
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            {isActive && <Crown className="h-4 w-4 text-yellow-500" />}
+            <span className="hidden sm:inline">
+              {isActive && subscription
+                ? `${subscription.plan_type === 'weekly' ? '週額プラン' : '月額プラン'}（残り${subscription.days_remaining}日）`
+                : `今日の利用: ${subscription?.today_usage || 0}/20回`
+              }
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => switchScreenType('SUBSCRIPTION')}
+              className="ml-2"
+            >
+              {isActive ? 'プラン管理' : 'プレミアム'}
+            </Button>
+          </div>
+        </div>
         <MaxLengthTextarea
           maxLength={MAX_LENGTH}
           value={inputText}

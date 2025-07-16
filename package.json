@@ -13,6 +13,8 @@
     "@radix-ui/react-label": "^2.1.7",
     "@radix-ui/react-select": "^2.2.5",
     "@radix-ui/react-slot": "^1.2.3",
+    "@stripe/react-stripe-js": "^3.7.0",
+    "@stripe/stripe-js": "^7.5.0",
     "@tailwindcss/vite": "^4.1.7",
     "@tauri-apps/api": "^2.4.1",
     "@tauri-apps/plugin-clipboard-manager": "^2.2.2",
