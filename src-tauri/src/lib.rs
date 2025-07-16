@@ -12,6 +12,12 @@ use tauri_plugin_store::StoreExt;
 static GENERATION_LIMIT: u64 = 20;
 const API_URL: &str = dotenv!("API_URL");
 
+// Stripe関連の環境変数
+const STRIPE_PUBLISHABLE_KEY: &str = dotenv!("STRIPE_PUBLISHABLE_KEY");
+const STRIPE_SECRET_KEY: &str = dotenv!("STRIPE_SECRET_KEY");
+const STRIPE_PRICE_WEEKLY: &str = dotenv!("STRIPE_PRICE_WEEKLY");
+const STRIPE_PRICE_MONTHLY: &str = dotenv!("STRIPE_PRICE_MONTHLY");
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct SubscriptionInfo {
     plan_type: String,
@@ -43,6 +49,27 @@ struct SubscriptionStatus {
     expires_at: Option<String>,
     today_usage: u64,
     max_daily_usage: u64,
+}
+
+#[derive(Debug, Serialize)]
+struct StripeConfig {
+    publishable_key: String,
+    price_weekly: String,
+    price_monthly: String,
+}
+
+#[derive(Debug, Serialize)]
+struct CheckoutSessionResponse {
+    session_id: String,
+    url: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CreateCheckoutRequest {
+    price_id: String,
+    plan_type: String,
+    success_url: String,
+    cancel_url: String,
 }
 
 // サブスクリプション情報のチェックサムを計算
@@ -368,6 +395,69 @@ async fn get_subscription_status(app_handle: AppHandle) -> Result<SubscriptionSt
     })
 }
 
+#[tauri::command]
+fn get_stripe_config() -> Result<StripeConfig, String> {
+    Ok(StripeConfig {
+        publishable_key: STRIPE_PUBLISHABLE_KEY.to_string(),
+        price_weekly: STRIPE_PRICE_WEEKLY.to_string(),
+        price_monthly: STRIPE_PRICE_MONTHLY.to_string(),
+    })
+}
+
+#[tauri::command]
+async fn create_checkout_session(request: CreateCheckoutRequest) -> Result<CheckoutSessionResponse, String> {
+    let client = reqwest::Client::new();
+
+    // Stripe Checkout Session作成のパラメータ
+    let params = [
+        ("line_items[0][price]", request.price_id.as_str()),
+        ("line_items[0][quantity]", "1"),
+        ("mode", "subscription"),
+        ("success_url", &format!("{}?session_id={{CHECKOUT_SESSION_ID}}&plan_type={}", request.success_url, request.plan_type)),
+        ("cancel_url", &format!("{}?plan_type={}", request.cancel_url, request.plan_type)),
+        // Stripe Link を有効にする設定
+        ("payment_method_types[0]", "card"),
+        ("payment_method_types[1]", "link"),
+        ("allow_promotion_codes", "true"),
+    ];
+
+    let response = client
+        .post("https://api.stripe.com/v1/checkout/sessions")
+        .basic_auth(STRIPE_SECRET_KEY, Some(""))
+        .form(&params)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send request: {}", e))?;
+
+    if !response.status().is_success() {
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(format!("Stripe API error: {}", error_text));
+    }
+
+    let response_json: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+    let session_id = response_json["id"]
+        .as_str()
+        .ok_or("Missing session ID in response")?
+        .to_string();
+
+    let checkout_url = response_json["url"]
+        .as_str()
+        .ok_or("Missing URL in response")?
+        .to_string();
+
+    Ok(CheckoutSessionResponse {
+        session_id,
+        url: checkout_url,
+    })
+}
+
 // サブスクリプション情報を更新
 #[tauri::command]
 async fn update_subscription(
@@ -496,7 +586,9 @@ pub fn run() {
             get_subscription_status,
             update_subscription,
             reset_subscription,
-            check_subscription_validity
+            check_subscription_validity,
+            get_stripe_config,
+            create_checkout_session
         ])
         .on_window_event(|window, event| {
             use tauri::WindowEvent;

@@ -24,46 +24,26 @@ export function Subscription() {
   const handlePurchase = async (planType: PlanType) => {
     setIsProcessing(true);
     try {
-      const priceId = getPriceId(planType);
+      const priceId = await getPriceId(planType);
 
       // Stripe Checkout セッションを作成
-      const { url, sessionId } = await createCheckoutSession({
+      await createCheckoutSession({
         priceId,
         planType,
         successUrl: window.location.origin + '/payment-success',
         cancelUrl: window.location.origin + '/payment-cancel'
       });
 
-      // モック決済処理（実際の決済の代わり）
-      toast.success('決済処理を開始しています...', {
-        duration: 2000,
-      });
-
-      // 実際の環境では window.location.href = url; で Stripe Checkout に遷移
-      // ここではモック処理として直接決済完了処理を実行
-      setTimeout(async () => {
-        try {
-          // モック決済成功として処理
-          const customerId = `customer_${Date.now()}`;
-          const verificationToken = `token_${sessionId}`;
-
-          // サブスクリプションを更新
-          await updatePlan(planType, customerId, verificationToken);
-
-          toast.success(`${planType === 'weekly' ? '週額' : '月額'}プランの決済が完了しました！`);
-          switchScreenType('MAIN');
-        } catch (updateError) {
-          console.error('Subscription update failed:', updateError);
-          toast.error('サブスクリプションの更新に失敗しました');
-        }
-      }, 2000);
+      // createCheckoutSession内でredirectToCheckoutが実行されるため、
+      // 正常時はここに到達しません（ページ遷移が発生）
 
     } catch (error) {
       console.error('Payment failed:', error);
       toast.error('決済処理中にエラーが発生しました');
-    } finally {
       setIsProcessing(false);
     }
+    // setIsProcessing(false) は意図的に省略
+    // ページ遷移が発生するか、エラー時のみsetIsProcessing(false)を実行
   };
 
   const handleBack = () => {
