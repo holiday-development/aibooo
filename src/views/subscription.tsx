@@ -4,14 +4,15 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useSubscription } from '@/contexts/use-subscription';
 import { useScreenType } from '@/contexts/use-screen-type';
 import { SUBSCRIPTION_PLANS, PlanType } from '@/types/subscription';
-import { Check, Crown, ArrowLeft, CreditCard } from 'lucide-react';
+import { Check, Crown, ArrowLeft, CreditCard, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { createCheckoutSession, getPriceId } from '@/lib/stripe';
 
 export function Subscription() {
   const [selectedPlan, setSelectedPlan] = useState<PlanType | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const { subscription, updatePlan } = useSubscription();
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const { subscription, updatePlan, resetPlan } = useSubscription();
   const isActive = subscription?.is_active || false;
   const daysRemaining = subscription?.days_remaining || 0;
   const { switchScreenType } = useScreenType();
@@ -69,6 +70,22 @@ export function Subscription() {
     switchScreenType('MAIN');
   };
 
+  const handleCancelSubscription = async () => {
+    setIsProcessing(true);
+    try {
+      await resetPlan();
+      toast.success('サブスクリプションをキャンセルしました', {
+        description: '無料プランに戻りました。ご利用ありがとうございました。',
+      });
+      setShowCancelConfirm(false);
+    } catch (error) {
+      console.error('Failed to cancel subscription:', error);
+      toast.error('キャンセル処理中にエラーが発生しました');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return (
     <div className="h-full w-full p-6 overflow-auto">
       <div className="max-w-4xl mx-auto">
@@ -84,34 +101,14 @@ export function Subscription() {
           </div>
         </div>
 
-        {/* 現在のサブスクリプション状態 */}
-        {isActive && (
-          <Card className="mb-8 border-green-200 bg-green-50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-green-800">
-                <Crown className="h-5 w-5" />
-                プレミアム会員
-              </CardTitle>
-              <CardDescription className="text-green-700">
-                                 {subscription?.plan_type === 'weekly' ? '週額プラン' : '月額プラン'}が有効です
-                {daysRemaining > 0 && `（残り${daysRemaining}日）`}
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        )}
-
         {/* プラン比較 */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           {SUBSCRIPTION_PLANS.map((plan) => {
-            const isSelected = selectedPlan === plan.id;
-                         const isCurrentPlan = subscription?.plan_type === plan.id && isActive;
-
-            return (
-              <Card
+            const isSelected = selectedPlan === plan.id; const isCurrentPlan = subscription?.plan_type === plan.id && isActive; return ( <Card
                 key={plan.id}
                 className={`cursor-pointer transition-all hover:shadow-lg ${
                   isSelected ? 'ring-2 ring-primary' : ''
-                } ${isCurrentPlan ? 'border-green-400' : ''}`}
+                } ${isCurrentPlan ? 'border-primary/50' : ''}`}
                 onClick={() => handlePlanSelect(plan.id)}
               >
                 <CardHeader>
@@ -121,7 +118,7 @@ export function Subscription() {
                       <CardDescription>{plan.description}</CardDescription>
                     </div>
                     {isCurrentPlan && (
-                      <div className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
+                      <div className="bg-primary/10 text-primary text-xs px-2 py-1 rounded-full font-medium">
                         利用中
                       </div>
                     )}
@@ -137,19 +134,19 @@ export function Subscription() {
                 <CardContent>
                   <ul className="space-y-3">
                     <li className="flex items-center gap-2">
-                      <Check className="h-4 w-4 text-green-500" />
+                      <Check className="h-4 w-4 text-primary" />
                       <span>無制限の利用回数</span>
                     </li>
                     <li className="flex items-center gap-2">
-                      <Check className="h-4 w-4 text-green-500" />
+                      <Check className="h-4 w-4 text-primary" />
                       <span>全ての変換機能</span>
                     </li>
                     <li className="flex items-center gap-2">
-                      <Check className="h-4 w-4 text-green-500" />
+                      <Check className="h-4 w-4 text-primary" />
                       <span>優先サポート</span>
                     </li>
                     <li className="flex items-center gap-2">
-                      <Check className="h-4 w-4 text-green-500" />
+                      <Check className="h-4 w-4 text-primary" />
                       <span>{plan.duration}日間有効</span>
                     </li>
                   </ul>
@@ -189,7 +186,7 @@ export function Subscription() {
         </div>
 
         {/* 無料プラン */}
-        <Card className="border-gray-200">
+        <Card className="border-muted">
           <CardHeader>
             <CardTitle className="text-xl">無料プラン</CardTitle>
             <CardDescription>基本的な機能をお試しいただけます</CardDescription>
@@ -202,15 +199,16 @@ export function Subscription() {
           <CardContent>
             <ul className="space-y-3">
               <li className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-gray-400" />
+                <Check className="h-4 w-4 text-muted-foreground" />
                 <span>1日20回まで利用可能</span>
               </li>
               <li className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-gray-400" />
+                <Check className="h-4 w-4 text-muted-foreground" />
                 <span>基本的な変換機能</span>
               </li>
             </ul>
           </CardContent>
+
 
           <CardFooter>
             <Button
@@ -223,6 +221,65 @@ export function Subscription() {
             </Button>
           </CardFooter>
         </Card>
+                {/* 現在のサブスクリプション状態 */}
+        {isActive && (
+          <Card className="mb-8 border-primary/20 bg-primary/5">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-primary">
+                <Crown className="h-5 w-5" />
+                プレミアム会員
+              </CardTitle>
+              <CardDescription className="text-foreground/80">
+                {subscription?.plan_type === 'weekly' ? '週額プラン' : '月額プラン'}が有効です
+                {daysRemaining > 0 && `（残り${daysRemaining}日）`}
+              </CardDescription>
+            </CardHeader>
+            <CardFooter className="pt-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowCancelConfirm(true)}
+                className="text-destructive border-destructive/30 hover:bg-destructive/10"
+              >
+                <AlertTriangle className="h-4 w-4 mr-2" />
+                サブスクリプションをキャンセル
+              </Button>
+            </CardFooter>
+          </Card>
+        )}
+
+        {/* 解約確認ダイアログ */}
+        {showCancelConfirm && (
+          <Card className="mb-8 border-destructive/20 bg-destructive/5">
+            <CardHeader>
+              <CardTitle className="text-destructive">
+                サブスクリプションのキャンセル確認
+              </CardTitle>
+              <CardDescription className="text-foreground/80">
+                本当にサブスクリプションをキャンセルしますか？<br />
+                キャンセル後は無料プランに戻り、プレミアム機能をご利用いただけなくなります。
+              </CardDescription>
+            </CardHeader>
+            <CardFooter className="pt-0 gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowCancelConfirm(false)}
+                disabled={isProcessing}
+              >
+                キャンセルしない
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleCancelSubscription}
+                disabled={isProcessing}
+              >
+                {isProcessing ? 'キャンセル中...' : 'はい、キャンセルします'}
+              </Button>
+            </CardFooter>
+          </Card>
+        )}
+
+
 
         {/* 注意事項 */}
         <div className="mt-8 text-sm text-muted-foreground">
