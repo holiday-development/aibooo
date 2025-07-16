@@ -6,8 +6,10 @@ import {
   useState,
   ReactNode,
 } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { SubscriptionStatus } from '@/types/subscription';
 
-type ScreenType = 'MAIN' | 'LIMIT_EXCEEDED' | 'ONBOARDING';
+type ScreenType = 'MAIN' | 'LIMIT_EXCEEDED' | 'ONBOARDING' | 'SUBSCRIPTION';
 
 const GENERATION_LIMIT = 20;
 
@@ -49,13 +51,27 @@ export const ScreenTypeProvider = ({ children }: { children: ReactNode }) => {
   async function initialScreenType() {
     const screenType = await loadScreenTypeStore();
     setScreenType((screenType as ScreenType | undefined) || 'ONBOARDING');
+
+    // サブスクリプション状態を確認
+    let hasActiveSubscription = false;
+    try {
+      const subscription = await invoke<SubscriptionStatus>('get_subscription_status');
+      hasActiveSubscription = subscription.is_active;
+    } catch (error) {
+      console.error('Failed to get subscription status:', error);
+    }
+
     const todayRequestCount = await loadTodayRequestCount();
-    if (todayRequestCount >= GENERATION_LIMIT) {
+
+    // プレミアム会員は制限なし
+    if (!hasActiveSubscription && todayRequestCount >= GENERATION_LIMIT) {
       switchScreenType('LIMIT_EXCEEDED');
     }
+
+    // 制限解除されている場合はメイン画面に戻す
     if (
       screenType === 'LIMIT_EXCEEDED' &&
-      todayRequestCount < GENERATION_LIMIT
+      (hasActiveSubscription || todayRequestCount < GENERATION_LIMIT)
     ) {
       switchScreenType('MAIN');
     }

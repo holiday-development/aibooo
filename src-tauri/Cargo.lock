@@ -30,11 +30,13 @@ dependencies = [
 name = "aibooo"
 version = "0.1.1"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
  "dotenvy_macro",
  "reqwest 0.11.27",
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-clipboard-manager",
