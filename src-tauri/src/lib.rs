@@ -7,8 +7,99 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_store::StoreExt;
 
+// AWS Cognito関連のimport (必要なものだけ残す)
+
+// Cognitoサービスモジュール
+mod cognito;
+use cognito::{CognitoService, SignUpResponse, SignInResponse, ConfirmSignUpResponse, CognitoError};
+
 static GENERATION_LIMIT: u64 = 20;
 const API_URL: &str = dotenv!("API_URL");
+
+// AWS Cognito設定
+const AWS_REGION: &str = dotenv!("AWS_REGION");
+const COGNITO_USER_POOL_ID: &str = dotenv!("COGNITO_USER_POOL_ID");
+const COGNITO_CLIENT_ID: &str = dotenv!("COGNITO_CLIENT_ID");
+
+// Cognitoサービスのインスタンスを作成するヘルパー関数
+async fn create_cognito_service() -> Result<CognitoService, CognitoError> {
+    CognitoService::new(
+        COGNITO_USER_POOL_ID.to_string(),
+        COGNITO_CLIENT_ID.to_string()
+    ).await
+}
+
+// ユーザー登録用のTauriコマンド
+#[tauri::command]
+async fn register_user(email: String, password: String) -> Result<SignUpResponse, String> {
+    let cognito_service = create_cognito_service().await
+        .map_err(|e| format!("Cognitoサービスの初期化に失敗しました: {}", e))?;
+
+    cognito_service.sign_up(&email, &password).await
+        .map_err(|e| format!("ユーザー登録に失敗しました: {}", e))
+}
+
+// メール認証確認用のTauriコマンド
+#[tauri::command]
+async fn verify_email(email: String, confirmation_code: String) -> Result<ConfirmSignUpResponse, String> {
+    let cognito_service = create_cognito_service().await
+        .map_err(|e| format!("Cognitoサービスの初期化に失敗しました: {}", e))?;
+
+    cognito_service.confirm_sign_up(&email, &confirmation_code).await
+        .map_err(|e| format!("メール認証に失敗しました: {}", e))
+}
+
+// ログイン用のTauriコマンド
+#[tauri::command]
+async fn login_user(email: String, password: String) -> Result<SignInResponse, String> {
+    let cognito_service = create_cognito_service().await
+        .map_err(|e| format!("Cognitoサービスの初期化に失敗しました: {}", e))?;
+
+    cognito_service.sign_in(&email, &password).await
+        .map_err(|e| format!("ログインに失敗しました: {}", e))
+}
+
+// メール認証とログインを同時に行うコマンド
+#[derive(serde::Deserialize)]
+struct VerifyEmailAndLoginRequest {
+    email: String,
+    password: String,
+    confirmation_code: String,
+}
+
+#[tauri::command]
+async fn verify_email_and_login(request: VerifyEmailAndLoginRequest) -> Result<SignInResponse, String> {
+    let cognito_service = create_cognito_service().await
+        .map_err(|e| format!("Cognitoサービスの初期化に失敗しました: {}", e))?;
+
+    cognito_service.confirm_sign_up_and_sign_in(&request.email, &request.password, &request.confirmation_code).await
+        .map_err(|e| format!("メール認証とログインに失敗しました: {}", e))
+}
+
+// 認証状態をチェックするヘルパー関数
+fn is_user_authenticated(app_handle: &tauri::AppHandle) -> bool {
+    let store = match app_handle.store("auth.json") {
+        Ok(store) => store,
+        Err(_) => return false,
+    };
+
+    let tokens = match store.get("tokens") {
+        Some(tokens) => tokens,
+        None => return false,
+    };
+
+    // トークンの有効期限をチェック
+    if let Some(expires_at) = tokens.get("expires_at").and_then(|v| v.as_u64()) {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+
+        expires_at > now
+    } else {
+        false
+    }
+}
 
 #[tauri::command]
 async fn convert_text(
@@ -16,31 +107,34 @@ async fn convert_text(
     type_: &str,
     app_handle: tauri::AppHandle,
 ) -> Result<String, String> {
-    // 利用回数制限のためのストア取得
-    let store = app_handle.store("usage.json").map_err(|e| {
-        serde_json::json!({"type": "store_error", "message": e.to_string()}).to_string()
-    })?;
-    let today = Local::now().format("%Y-%m-%d").to_string();
-    let mut request_count = store
-        .get("request_count")
-        .and_then(|v| v.as_object().cloned())
-        .unwrap_or_default();
-    let count = request_count
-        .get(&today)
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0);
-    if count >= GENERATION_LIMIT {
-        return Err(serde_json::json!({
-            "type": "limit_exceeded",
-            "message": format!("本日の利用回数上限（{}回）に達しました", GENERATION_LIMIT)
-        })
-        .to_string());
+    // 認証済みユーザーは制限をスキップ
+    if !is_user_authenticated(&app_handle) {
+        // 利用回数制限のためのストア取得
+        let store = app_handle.store("usage.json").map_err(|e| {
+            serde_json::json!({"type": "store_error", "message": e.to_string()}).to_string()
+        })?;
+        let today = Local::now().format("%Y-%m-%d").to_string();
+        let mut request_count = store
+            .get("request_count")
+            .and_then(|v| v.as_object().cloned())
+            .unwrap_or_default();
+        let count = request_count
+            .get(&today)
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        if count >= GENERATION_LIMIT {
+            return Err(serde_json::json!({
+                "type": "limit_exceeded",
+                "message": format!("本日の利用回数上限（{}回）に達しました", GENERATION_LIMIT)
+            })
+            .to_string());
+        }
+        request_count.insert(today.clone(), serde_json::json!(count + 1));
+        store.set("request_count", serde_json::json!(request_count));
+        store.save().map_err(|e| {
+            serde_json::json!({"type": "store_error", "message": e.to_string()}).to_string()
+        })?;
     }
-    request_count.insert(today.clone(), serde_json::json!(count + 1));
-    store.set("request_count", serde_json::json!(request_count));
-    store.save().map_err(|e| {
-        serde_json::json!({"type": "store_error", "message": e.to_string()}).to_string()
-    })?;
 
     println!(
         "convert_text関数が呼び出されました: テキスト長さ {}",
@@ -221,7 +315,7 @@ pub fn run() {
             println!("セットアップ完了");
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![convert_text, process_clipboard])
+        .invoke_handler(tauri::generate_handler![convert_text, process_clipboard, register_user, verify_email, login_user, verify_email_and_login])
         .on_window_event(|window, event| {
             use tauri::WindowEvent;
             if let WindowEvent::CloseRequested { api, .. } = event {
