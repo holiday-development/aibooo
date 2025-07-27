@@ -39,7 +39,23 @@ export function Subscription() {
 
     } catch (error) {
       console.error('Payment failed:', error);
-      toast.error('決済処理中にエラーが発生しました');
+
+      // エラーメッセージを詳細化
+      let errorMessage = '決済処理中にエラーが発生しました';
+      if (error instanceof Error) {
+        if (error.message.includes('環境変数')) {
+          errorMessage = 'Stripe設定が不完全です。管理者にお問い合わせください。';
+        } else if (error.message.includes('price')) {
+          errorMessage = 'プラン設定に問題があります。管理者にお問い合わせください。';
+        } else {
+          errorMessage = `決済エラー: ${error.message}`;
+        }
+      }
+
+      toast.error(errorMessage, {
+        description: '設定を確認してから再度お試しください。',
+        duration: 5000,
+      });
       setIsProcessing(false);
     }
     // setIsProcessing(false) は意図的に省略

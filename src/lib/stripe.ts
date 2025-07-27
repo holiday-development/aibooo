@@ -28,15 +28,23 @@ let stripeConfig: StripeConfig | null = null;
 
 // Rust側からStripe設定を取得
 async function getStripeConfig(): Promise<StripeConfig> {
-  if (!stripeConfig) {
-    try {
-      stripeConfig = await invoke<StripeConfig>('get_stripe_config');
-    } catch (error) {
-      console.error('Stripe設定の取得に失敗しました:', error);
-      throw new Error('Stripe設定を読み込めませんでした');
-    }
+  if (stripeConfig) {
+    return stripeConfig;
   }
-  return stripeConfig;
+
+  try {
+    stripeConfig = await invoke<StripeConfig>('get_stripe_config');
+
+    // 環境変数の設定チェック
+    if (!stripeConfig.publishable_key || stripeConfig.publishable_key.includes('your_')) {
+      throw new Error('Stripe環境変数が設定されていません。src-tauri/.envファイルを作成してStripeのAPIキーを設定してください。');
+    }
+
+    return stripeConfig;
+  } catch (error) {
+    console.error('Stripe config error:', error);
+    throw new Error('Stripe設定の取得に失敗しました。環境変数を確認してください。');
+  }
 }
 
 // Stripeインスタンスを作成（遅延初期化）
