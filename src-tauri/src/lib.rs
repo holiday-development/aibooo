@@ -1,5 +1,5 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-use chrono::{Local, DateTime, Utc};
+use chrono::{Local, Utc, DateTime, Duration};
 use dotenvy_macro::dotenv;
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -111,8 +111,8 @@ fn is_subscription_active(subscription: &SubscriptionInfo) -> bool {
     }
 
     if let Some(expires_str) = &subscription.expires_at {
-        if let Ok(expires_time) = chrono::DateTime::parse_from_rfc3339(expires_str) {
-            let now = chrono::Utc::now();
+        if let Ok(expires_time) = DateTime::parse_from_rfc3339(expires_str) {
+            let now = Utc::now();
             return expires_time > now;
         }
     }
@@ -123,8 +123,8 @@ fn is_subscription_active(subscription: &SubscriptionInfo) -> bool {
 // 残り日数を計算
 fn get_days_remaining(subscription: &SubscriptionInfo) -> i64 {
     if let Some(expires_str) = &subscription.expires_at {
-        if let Ok(expires_time) = chrono::DateTime::parse_from_rfc3339(expires_str) {
-            let now = chrono::Utc::now();
+        if let Ok(expires_time) = DateTime::parse_from_rfc3339(expires_str) {
+            let now = Utc::now();
             let diff = expires_time.signed_duration_since(now);
             return diff.num_days().max(0);
         }
@@ -159,29 +159,31 @@ async fn update_subscription(
         plan_type: plan_type.clone(),
         stripe_customer_id: Some(stripe_customer_id),
         verification_token,
-        purchased_at: Some(chrono::Utc::now().to_rfc3339()),
+        purchased_at: Some(Utc::now().to_rfc3339()),
         expires_at: None,
     };
 
     // 有効期限を計算
     if plan_type == "weekly" {
-        let expires_at = chrono::Utc::now() + chrono::Duration::days(7);
+        let expires_at = Utc::now() + Duration::days(7);
         subscription.expires_at = Some(expires_at.to_rfc3339());
     } else if plan_type == "monthly" {
-        let expires_at = chrono::Utc::now() + chrono::Duration::days(30);
+        let expires_at = Utc::now() + Duration::days(30);
         subscription.expires_at = Some(expires_at.to_rfc3339());
     }
 
     save_subscription_to_store(&app_handle, &subscription)?;
 
+    let plan_type_result = subscription.plan_type.clone();
+    let expires_at_result = subscription.expires_at.clone();
     let is_active = is_subscription_active(&subscription);
     let days_remaining = get_days_remaining(&subscription);
 
     Ok(SubscriptionStatus {
-        plan_type: subscription.plan_type,
+        plan_type: plan_type_result,
         is_active,
         days_remaining,
-        expires_at: subscription.expires_at,
+        expires_at: expires_at_result,
     })
 }
 
@@ -209,13 +211,16 @@ async fn check_subscription_validity(app_handle: AppHandle) -> Result<Subscripti
         return reset_subscription(app_handle).await;
     }
 
+    let plan_type = subscription.plan_type.clone();
+    let expires_at = subscription.expires_at.clone();
+    let is_active = is_subscription_active(&subscription);
     let days_remaining = get_days_remaining(&subscription);
 
     Ok(SubscriptionStatus {
-        plan_type: subscription.plan_type,
-        is_active: is_subscription_active(&subscription),
+        plan_type,
+        is_active,
         days_remaining,
-        expires_at: subscription.expires_at,
+        expires_at,
     })
 }
 
