@@ -105,8 +105,8 @@ export function EmailVerification() {
         // 認証状態を更新
         await checkAuthStatus();
 
-        // MAIN画面に遷移
-        switchScreenType('MAIN');
+        // 新規登録完了後はプラン選択画面に遷移
+        switchScreenType('SUBSCRIPTION');
       } else {
         throw new Error('認証トークンの取得に失敗しました');
       }

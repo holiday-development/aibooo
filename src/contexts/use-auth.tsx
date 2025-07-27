@@ -77,12 +77,15 @@ const determinePostLoginScreen = async (_accessToken: string): Promise<'MAIN' | 
     // 最新のサブスクリプション情報を取得
     const subscription = await getSubscription();
 
-    // サブスクリプションが有効かチェック
-    if (isSubscriptionActive(subscription)) {
-      console.log('User has active subscription, navigating to MAIN');
+    // 明確に有料プランが有効で、かつ過去に購入経験があるユーザーのみMAIN画面へ
+    if (isSubscriptionActive(subscription) &&
+        subscription.purchased_at &&
+        subscription.stripe_customer_id) {
+      console.log('User has active paid subscription with purchase history, navigating to MAIN');
       return 'MAIN';
     } else {
-      console.log('User has no active subscription, navigating to SUBSCRIPTION');
+      // 新規ユーザー、無料ユーザー、期限切れユーザーは全てプラン選択画面へ
+      console.log('User needs to select a plan, navigating to SUBSCRIPTION');
       return 'SUBSCRIPTION';
     }
   } catch (error) {

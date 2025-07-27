@@ -45,7 +45,7 @@ export function Login() {
     try {
       await login(email, password);
       toast.success('ログインに成功しました');
-      switchScreenType('MAIN');
+      // 画面遷移はuse-auth.tsxのログイン完了フラグによって自動的に処理される
     } catch (error) {
       console.error('Login error:', error);
 
