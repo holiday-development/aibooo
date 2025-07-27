@@ -91,6 +91,18 @@ export function createSubscription(
  */
 export async function getSubscriptionFromCognito(accessToken: string): Promise<SubscriptionInfo> {
   try {
+    // Tauriアプリが起動していない場合はスキップ
+    if (typeof window === 'undefined' || !('__TAURI__' in window)) {
+      console.log('Tauri app not available, skipping Cognito subscription fetch');
+      return {
+        plan_type: 'free',
+        expires_at: null,
+        stripe_customer_id: null,
+        verification_token: null,
+        purchased_at: null,
+      };
+    }
+
     const userAttributes = await invoke<CognitoUserAttributes>('get_user_subscription_from_cognito', {
       accessToken
     });
@@ -124,6 +136,12 @@ export async function updateSubscriptionInCognito(
   expiresAt?: string
 ): Promise<boolean> {
   try {
+    // Tauriアプリが起動していない場合はスキップ
+    if (typeof window === 'undefined' || !('__TAURI__' in window)) {
+      console.log('Tauri app not available, skipping Cognito subscription update');
+      return false;
+    }
+
     await invoke('update_user_subscription_in_cognito', {
       accessToken,
       subscriptionPlan: planType === 'free' ? null : planType,

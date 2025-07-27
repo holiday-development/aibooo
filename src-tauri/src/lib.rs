@@ -239,41 +239,53 @@ async fn get_stripe_config() -> Result<StripeConfig, String> {
 async fn create_checkout_session(request: CreateCheckoutRequest) -> Result<CheckoutSessionResponse, String> {
     let client = reqwest::Client::new();
 
-    let mut params = std::collections::HashMap::new();
-    params.insert("mode", "payment".to_string());
-    params.insert("line_items[0][price]", request.price_id.clone());
-    params.insert("line_items[0][quantity]", "1".to_string());
-    params.insert("success_url", request.success_url.clone());
-    params.insert("cancel_url", request.cancel_url.clone());
-    params.insert("metadata[plan_type]", request.plan_type.clone());
+    // Stripe Checkout Session作成のパラメータ
+    let params = [
+        ("line_items[0][price]", request.price_id.as_str()),
+        ("line_items[0][quantity]", "1"),
+        ("mode", "subscription"), // 継続課金に変更
+        ("success_url", &format!("{}?session_id={{CHECKOUT_SESSION_ID}}&plan_type={}", request.success_url, request.plan_type)),
+        ("cancel_url", &format!("{}?plan_type={}", request.cancel_url, request.plan_type)),
+        // Stripe Link を有効にする設定
+        ("payment_method_types[0]", "card"),
+        ("payment_method_types[1]", "link"),
+        ("allow_promotion_codes", "true"),
+    ];
 
     let response = client
         .post("https://api.stripe.com/v1/checkout/sessions")
-        .header("Authorization", format!("Bearer {}", STRIPE_SECRET_KEY))
+        .basic_auth(STRIPE_SECRET_KEY, Some(""))
         .form(&params)
         .send()
         .await
-        .map_err(|e| format!("Stripe API request failed: {}", e))?;
+        .map_err(|e| format!("Failed to send request: {}", e))?;
 
     if !response.status().is_success() {
-        let error_text = response.text().await.unwrap_or_default();
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_default();
         return Err(format!("Stripe API error: {}", error_text));
     }
 
-    let session_data: serde_json::Value = response.json().await
-        .map_err(|e| format!("Failed to parse Stripe response: {}", e))?;
+    let response_json: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
 
-    let session_id = session_data["id"].as_str()
+    let session_id = response_json["id"]
+        .as_str()
         .ok_or("Missing session ID in response")?
         .to_string();
 
-    let url = session_data["url"].as_str()
+    let checkout_url = response_json["url"]
+        .as_str()
         .ok_or("Missing URL in response")?
         .to_string();
 
     Ok(CheckoutSessionResponse {
         session_id,
-        url,
+        url: checkout_url,
     })
 }
 

@@ -33,6 +33,11 @@ async function getStripeConfig(): Promise<StripeConfig> {
   }
 
   try {
+    // Tauriアプリが起動していない場合のフォールバック
+    if (typeof window === 'undefined' || !('__TAURI__' in window)) {
+      throw new Error('Tauri app not available. フロントエンドのみでは決済処理はサポートされていません。');
+    }
+
     stripeConfig = await invoke<StripeConfig>('get_stripe_config');
 
     // 環境変数の設定チェック
