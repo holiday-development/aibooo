@@ -6,12 +6,14 @@ import { EmailVerification } from '@/views/email-verification';
 import { useCallback, useEffect } from 'react';
 import { useScreenType } from '@/contexts/use-screen-type';
 import { useAuth } from '@/contexts/use-auth';
+import { useSubscription } from '@/contexts/use-subscription';
 import { Onboarding } from '@/views/onboarding';
 import { checkForUpdate } from '@/lib/checkForUpdate';
 
 export default function App() {
   const { screenType } = useScreenType();
   const { loading } = useAuth();
+  const { isLoading: subscriptionLoading } = useSubscription();
 
   useEffect(() => {
     if (screenType === 'MAIN') {
@@ -46,8 +48,8 @@ export default function App() {
     }
   }, [screenType]);
 
-  // 認証状態のロード中は何も表示しない
-  if (loading) {
+  // 認証状態またはサブスクリプション状態のロード中は何も表示しない
+  if (loading || subscriptionLoading) {
     console.log('App: showing loading screen');
     return (
       <div className="flex items-center justify-center h-screen w-full bg-white">

@@ -43,6 +43,20 @@ pub struct ConfirmSignUpResponse {
     pub message: String,
 }
 
+// ユーザー属性関連のレスポンス型
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UserAttributesResponse {
+    pub email: String,
+    pub subscription_plan: Option<String>,
+    pub subscription_expires_at: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UpdateAttributesResponse {
+    pub success: bool,
+    pub message: String,
+}
+
 pub struct CognitoService {
     client: CognitoClient,
     user_pool_id: String,
@@ -264,5 +278,123 @@ impl CognitoService {
 
         // メール認証成功後、直接サインインを実行
         self.sign_in(email, password).await
+    }
+
+    // ユーザー属性を取得
+    pub async fn get_user_attributes(&self, access_token: &str) -> Result<UserAttributesResponse, CognitoError> {
+        println!("Getting user attributes...");
+
+        let result = self
+            .client
+            .get_user()
+            .access_token(access_token)
+            .send()
+            .await
+            .map_err(|e| {
+                println!("Cognito get_user error: {:?}", e);
+
+                let error_string = format!("{:?}", e);
+                let user_message = if error_string.contains("NotAuthorizedException") {
+                    "認証が無効です。再度ログインしてください。"
+                } else if error_string.contains("UserNotFoundException") {
+                    "ユーザーが見つかりません。"
+                } else {
+                    "ユーザー情報の取得に失敗しました。"
+                };
+
+                CognitoError {
+                    error_type: "get_user_error".to_string(),
+                    message: user_message.to_string(),
+                }
+            })?;
+
+        let mut email = String::new();
+        let mut subscription_plan: Option<String> = None;
+        let mut subscription_expires_at: Option<String> = None;
+
+        if let Some(user_attributes) = result.user_attributes() {
+            for attr in user_attributes {
+                match attr.name() {
+                    Some("email") => {
+                        email = attr.value().unwrap_or_default().to_string();
+                    }
+                    Some("custom:subscription_plan") => {
+                        subscription_plan = attr.value().map(|v| v.to_string());
+                    }
+                    Some("custom:subscription_expires_at") => {
+                        subscription_expires_at = attr.value().map(|v| v.to_string());
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        Ok(UserAttributesResponse {
+            email,
+            subscription_plan,
+            subscription_expires_at,
+        })
+    }
+
+    // ユーザー属性を更新
+    pub async fn update_user_attributes(
+        &self,
+        access_token: &str,
+        subscription_plan: Option<&str>,
+        subscription_expires_at: Option<&str>
+    ) -> Result<UpdateAttributesResponse, CognitoError> {
+        println!("Updating user attributes...");
+
+        let mut attributes = Vec::new();
+
+        if let Some(plan) = subscription_plan {
+            attributes.push(
+                AttributeType::builder()
+                    .name("custom:subscription_plan")
+                    .value(plan)
+                    .build()
+            );
+        }
+
+        if let Some(expires_at) = subscription_expires_at {
+            attributes.push(
+                AttributeType::builder()
+                    .name("custom:subscription_expires_at")
+                    .value(expires_at)
+                    .build()
+            );
+        }
+
+        let _result = self
+            .client
+            .update_user_attributes()
+            .access_token(access_token)
+            .set_user_attributes(Some(attributes))
+            .send()
+            .await
+            .map_err(|e| {
+                println!("Cognito update_user_attributes error: {:?}", e);
+
+                let error_string = format!("{:?}", e);
+                let user_message = if error_string.contains("NotAuthorizedException") {
+                    "認証が無効です。再度ログインしてください。"
+                } else if error_string.contains("InvalidParameterException") {
+                    "属性の更新に失敗しました。入力値を確認してください。"
+                } else {
+                    "ユーザー属性の更新に失敗しました。"
+                };
+
+                CognitoError {
+                    error_type: "update_user_attributes_error".to_string(),
+                    message: user_message.to_string(),
+                }
+            })?;
+
+        println!("User attributes updated successfully");
+
+        Ok(UpdateAttributesResponse {
+            success: true,
+            message: "ユーザー属性が正常に更新されました。".to_string(),
+        })
     }
 }

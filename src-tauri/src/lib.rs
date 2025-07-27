@@ -11,7 +11,7 @@ use tauri_plugin_store::StoreExt;
 
 // Cognitoサービスモジュール
 mod cognito;
-use cognito::{CognitoService, SignUpResponse, SignInResponse, ConfirmSignUpResponse, CognitoError};
+use cognito::{CognitoService, SignUpResponse, SignInResponse, ConfirmSignUpResponse, CognitoError, UserAttributesResponse, UpdateAttributesResponse};
 
 static GENERATION_LIMIT: u64 = 20;
 const API_URL: &str = dotenv!("API_URL");
@@ -190,6 +190,34 @@ async fn convert_text(
     }
 }
 
+// Cognitoユーザー属性からサブスクリプション情報を取得
+#[tauri::command]
+async fn get_user_subscription_from_cognito(access_token: String) -> Result<UserAttributesResponse, String> {
+    let cognito_service = create_cognito_service().await
+        .map_err(|e| format!("Cognitoサービスの初期化に失敗しました: {}", e))?;
+
+    cognito_service.get_user_attributes(&access_token).await
+        .map_err(|e| format!("ユーザー属性の取得に失敗しました: {}", e))
+}
+
+// Cognitoユーザー属性のサブスクリプション情報を更新
+#[tauri::command]
+async fn update_user_subscription_in_cognito(
+    access_token: String,
+    subscription_plan: Option<String>,
+    subscription_expires_at: Option<String>
+) -> Result<UpdateAttributesResponse, String> {
+    let cognito_service = create_cognito_service().await
+        .map_err(|e| format!("Cognitoサービスの初期化に失敗しました: {}", e))?;
+
+    cognito_service.update_user_attributes(
+        &access_token,
+        subscription_plan.as_deref(),
+        subscription_expires_at.as_deref()
+    ).await
+    .map_err(|e| format!("ユーザー属性の更新に失敗しました: {}", e))
+}
+
 // JSからの呼び出し用のエントリーポイント
 #[tauri::command]
 async fn process_clipboard(app_handle: AppHandle) -> Result<(String, String), String> {
@@ -315,7 +343,7 @@ pub fn run() {
             println!("セットアップ完了");
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![convert_text, process_clipboard, register_user, verify_email, login_user, verify_email_and_login])
+        .invoke_handler(tauri::generate_handler![convert_text, process_clipboard, register_user, verify_email, login_user, verify_email_and_login, get_user_subscription_from_cognito, update_user_subscription_in_cognito])
         .on_window_event(|window, event| {
             use tauri::WindowEvent;
             if let WindowEvent::CloseRequested { api, .. } = event {

@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { load } from '@tauri-apps/plugin-store';
 import { invoke } from '@tauri-apps/api/core';
+import { getSubscriptionFromCognito, updateSubscriptionInCognito } from '@/lib/subscription';
+import { saveSubscription, getSubscription } from '@/lib/storage';
 
 interface AuthTokens {
   access_token: string;
@@ -32,6 +34,41 @@ export const useAuth = () => {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
+};
+
+// Cognitoとローカルストアのサブスクリプション情報を同期
+const syncSubscriptionWithCognito = async (accessToken: string): Promise<void> => {
+  try {
+    console.log('Syncing subscription with Cognito...');
+
+    // Cognitoからサブスクリプション情報を取得
+    const cognitoSubscription = await getSubscriptionFromCognito(accessToken);
+
+    // ローカルストアからサブスクリプション情報を取得
+    const localSubscription = await getSubscription();
+
+    // どちらが新しいかを判定（ローカルストアに有料プランがあり、それが有効ならローカルを優先）
+    if (localSubscription.plan_type !== 'free' && localSubscription.expires_at) {
+      const localExpiresAt = new Date(localSubscription.expires_at);
+      const now = new Date();
+
+      if (localExpiresAt > now) {
+        // ローカルストアの有料プランが有効なら、Cognitoを更新
+        console.log('Local subscription is active, updating Cognito...');
+        await updateSubscriptionInCognito(accessToken, localSubscription.plan_type, localSubscription.expires_at);
+      } else {
+        // ローカルストアが期限切れなら、Cognitoの情報を使用
+        console.log('Local subscription expired, using Cognito data...');
+        await saveSubscription(cognitoSubscription);
+      }
+    } else {
+      // ローカルストアが無料プランなら、Cognitoの情報を使用
+      console.log('Local subscription is free, using Cognito data...');
+      await saveSubscription(cognitoSubscription);
+    }
+  } catch (error) {
+    console.error('Failed to sync subscription with Cognito:', error);
+  }
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -147,6 +184,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setTokens(newTokens);
       setUserEmail(email);
       setIsAuthenticated(true);
+
+      // Cognitoとローカルストアのサブスクリプション情報を同期
+      await syncSubscriptionWithCognito(result.access_token);
     } catch (error) {
       console.error('Login failed:', error);
       throw error;
