@@ -7,7 +7,7 @@ import {
   ReactNode,
 } from 'react';
 
-type ScreenType = 'MAIN' | 'LIMIT_EXCEEDED' | 'ONBOARDING' | 'LOGIN' | 'REGISTER' | 'EMAIL_VERIFICATION';
+type ScreenType = 'MAIN' | 'LIMIT_EXCEEDED' | 'ONBOARDING' | 'LOGIN' | 'REGISTER' | 'EMAIL_VERIFICATION' | 'SUBSCRIPTION';
 
 const GENERATION_LIMIT = 20;
 
@@ -47,6 +47,26 @@ export const ScreenTypeProvider = ({ children }: { children: ReactNode }) => {
   const [screenType, setScreenType] = useState<ScreenType>();
 
   async function initialScreenType() {
+    const store = await load('usage.json');
+
+    // ログイン完了フラグをチェック
+    const loginCompleted = await store.get('login_completed') as boolean | undefined;
+    const nextScreenAfterLogin = await store.get('next_screen_after_login') as ScreenType | undefined;
+
+    if (loginCompleted && nextScreenAfterLogin) {
+      // ログイン完了フラグがある場合は、指定された画面に遷移
+      console.log('Login completed, navigating to:', nextScreenAfterLogin);
+      setScreenType(nextScreenAfterLogin);
+      saveScreenTypeStore(nextScreenAfterLogin);
+
+      // フラグをクリア
+      await store.delete('login_completed');
+      await store.delete('next_screen_after_login');
+      await store.save();
+      return;
+    }
+
+    // 通常の初期化処理
     const screenType = await loadScreenTypeStore();
     setScreenType((screenType as ScreenType | undefined) || 'ONBOARDING');
     const todayRequestCount = await loadTodayRequestCount();

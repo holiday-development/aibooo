@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { load } from '@tauri-apps/plugin-store';
 import { invoke } from '@tauri-apps/api/core';
-import { getSubscriptionFromCognito, updateSubscriptionInCognito } from '@/lib/subscription';
+import { getSubscriptionFromCognito, updateSubscriptionInCognito, isSubscriptionActive } from '@/lib/subscription';
 import { saveSubscription, getSubscription } from '@/lib/storage';
 
 interface AuthTokens {
@@ -68,6 +68,27 @@ const syncSubscriptionWithCognito = async (accessToken: string): Promise<void> =
     }
   } catch (error) {
     console.error('Failed to sync subscription with Cognito:', error);
+  }
+};
+
+// ログイン後の画面遷移を決定
+const determinePostLoginScreen = async (_accessToken: string): Promise<'MAIN' | 'SUBSCRIPTION'> => {
+  try {
+    // 最新のサブスクリプション情報を取得
+    const subscription = await getSubscription();
+
+    // サブスクリプションが有効かチェック
+    if (isSubscriptionActive(subscription)) {
+      console.log('User has active subscription, navigating to MAIN');
+      return 'MAIN';
+    } else {
+      console.log('User has no active subscription, navigating to SUBSCRIPTION');
+      return 'SUBSCRIPTION';
+    }
+  } catch (error) {
+    console.error('Error determining post-login screen:', error);
+    // エラーの場合は安全側に倒してプラン選択画面へ
+    return 'SUBSCRIPTION';
   }
 };
 
@@ -187,6 +208,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Cognitoとローカルストアのサブスクリプション情報を同期
       await syncSubscriptionWithCognito(result.access_token);
+
+      // ログイン後の画面遷移を決定し、画面を切り替え
+      const nextScreen = await determinePostLoginScreen(result.access_token);
+
+      // ログイン完了フラグと次の画面をローカルストレージに保存
+      // screen-typeコンテキストでこれを監視して画面遷移を実行
+      const screenStore = await load('usage.json');
+      await screenStore.set('login_completed', true);
+      await screenStore.set('next_screen_after_login', nextScreen);
+      await screenStore.save();
+
     } catch (error) {
       console.error('Login failed:', error);
       throw error;

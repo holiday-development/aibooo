@@ -59,7 +59,7 @@ pub struct UpdateAttributesResponse {
 
 pub struct CognitoService {
     client: CognitoClient,
-    user_pool_id: String,
+    _user_pool_id: String, // 将来の使用のために保持するが、現在は未使用のためアンダースコアを付ける
     client_id: String,
 }
 
@@ -80,7 +80,7 @@ impl CognitoService {
 
         Ok(CognitoService {
             client,
-            user_pool_id,
+            _user_pool_id: user_pool_id,
             client_id,
         })
     }

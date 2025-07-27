@@ -3,6 +3,7 @@ import { Generator } from '@/views/generator';
 import { Login } from '@/views/login';
 import { Register } from '@/views/register';
 import { EmailVerification } from '@/views/email-verification';
+import { Subscription } from '@/views/subscription';
 import { useCallback, useEffect } from 'react';
 import { useScreenType } from '@/contexts/use-screen-type';
 import { useAuth } from '@/contexts/use-auth';
@@ -42,6 +43,9 @@ export default function App() {
       case 'EMAIL_VERIFICATION':
         console.log('App: Rendering EmailVerification');
         return <EmailVerification />;
+      case 'SUBSCRIPTION':
+        console.log('App: Rendering Subscription');
+        return <Subscription />;
       default:
         console.log('App: Rendering default Generator, screenType was:', screenType);
         return <Generator />;
