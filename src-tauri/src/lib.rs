@@ -226,12 +226,20 @@ async fn check_subscription_validity(app_handle: AppHandle) -> Result<Subscripti
 
 // Stripe設定を取得するTauriコマンド
 #[tauri::command]
-async fn get_stripe_config() -> Result<StripeConfig, String> {
-    Ok(StripeConfig {
+fn get_stripe_config() -> Result<StripeConfig, String> {
+    println!("get_stripe_config called");
+    println!("STRIPE_PUBLISHABLE_KEY: {}", STRIPE_PUBLISHABLE_KEY);
+    println!("STRIPE_PRICE_WEEKLY: {}", STRIPE_PRICE_WEEKLY);
+    println!("STRIPE_PRICE_MONTHLY: {}", STRIPE_PRICE_MONTHLY);
+
+    let config = StripeConfig {
         publishable_key: STRIPE_PUBLISHABLE_KEY.to_string(),
         price_weekly: STRIPE_PRICE_WEEKLY.to_string(),
         price_monthly: STRIPE_PRICE_MONTHLY.to_string(),
-    })
+    };
+
+    println!("Returning config: {:?}", config);
+    Ok(config)
 }
 
 // Stripe Checkout セッションを作成するTauriコマンド

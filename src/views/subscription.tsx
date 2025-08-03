@@ -24,7 +24,9 @@ export function Subscription() {
   const handlePurchase = async (planType: PlanType) => {
     setIsProcessing(true);
     try {
+      console.log('プラン選択:', planType);
       const priceId = await getPriceId(planType);
+      console.log('価格ID取得成功:', priceId);
 
       // Stripe Checkout セッションを作成
       await createCheckoutSession({

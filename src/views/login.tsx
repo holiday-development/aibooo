@@ -44,8 +44,8 @@ export function Login() {
 
     try {
       await login(email, password);
-      toast.success('ログインに成功しました');
       // 画面遷移はuse-auth.tsxのログイン完了フラグによって自動的に処理される
+      // トーストメッセージは削除（画面遷移を妨げる可能性があるため）
     } catch (error) {
       console.error('Login error:', error);
 

@@ -73,26 +73,9 @@ const syncSubscriptionWithCognito = async (accessToken: string): Promise<void> =
 
 // ログイン後の画面遷移を決定
 const determinePostLoginScreen = async (_accessToken: string): Promise<'MAIN' | 'SUBSCRIPTION'> => {
-  try {
-    // 最新のサブスクリプション情報を取得
-    const subscription = await getSubscription();
-
-    // 明確に有料プランが有効で、かつ過去に購入経験があるユーザーのみMAIN画面へ
-    if (isSubscriptionActive(subscription) &&
-        subscription.purchased_at &&
-        subscription.stripe_customer_id) {
-      console.log('User has active paid subscription with purchase history, navigating to MAIN');
-      return 'MAIN';
-    } else {
-      // 新規ユーザー、無料ユーザー、期限切れユーザーは全てプラン選択画面へ
-      console.log('User needs to select a plan, navigating to SUBSCRIPTION');
-      return 'SUBSCRIPTION';
-    }
-  } catch (error) {
-    console.error('Error determining post-login screen:', error);
-    // エラーの場合は安全側に倒してプラン選択画面へ
-    return 'SUBSCRIPTION';
-  }
+  // ログイン成功後は必ずプラン選択画面に遷移
+  console.log('Login successful, navigating to SUBSCRIPTION');
+  return 'SUBSCRIPTION';
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -179,6 +162,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // ログイン
   const login = async (email: string, password: string): Promise<void> => {
     try {
+      console.log('Login function called with email:', email);
       const result = await invoke('login_user', {
         email: email,
         password: password
@@ -189,6 +173,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         token_type: string;
         expires_in: number;
       };
+      console.log('Login API call successful, result:', result);
 
       const newTokens: AuthTokens = {
         access_token: result.access_token,
@@ -208,12 +193,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setTokens(newTokens);
       setUserEmail(email);
       setIsAuthenticated(true);
+      console.log('Auth state updated - isAuthenticated set to true');
 
       // Cognitoとローカルストアのサブスクリプション情報を同期
       await syncSubscriptionWithCognito(result.access_token);
 
       // ログイン後の画面遷移を決定し、画面を切り替え
       const nextScreen = await determinePostLoginScreen(result.access_token);
+      console.log('Login successful, next screen determined:', nextScreen);
 
       // ログイン完了フラグと次の画面をローカルストレージに保存
       // screen-typeコンテキストでこれを監視して画面遷移を実行
@@ -221,6 +208,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await screenStore.set('login_completed', true);
       await screenStore.set('next_screen_after_login', nextScreen);
       await screenStore.save();
+      console.log('Login completion flags saved to store');
 
     } catch (error) {
       console.error('Login failed:', error);

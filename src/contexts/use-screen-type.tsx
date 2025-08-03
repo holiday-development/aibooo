@@ -88,13 +88,17 @@ export const ScreenTypeProvider = ({ children }: { children: ReactNode }) => {
 
   // 認証状態の変化を監視してログイン完了後の画面遷移を処理
   useEffect(() => {
+    console.log('Auth state changed - isAuthenticated:', isAuthenticated, 'loading:', loading);
     if (!loading && isAuthenticated) {
       // 認証が完了した場合、ログイン完了フラグをチェック
       const checkLoginCompletion = async () => {
         try {
+          console.log('Checking login completion...');
           const store = await load('usage.json');
           const loginCompleted = await store.get('login_completed') as boolean | undefined;
           const nextScreenAfterLogin = await store.get('next_screen_after_login') as ScreenType | undefined;
+
+          console.log('Login completion check - loginCompleted:', loginCompleted, 'nextScreenAfterLogin:', nextScreenAfterLogin);
 
           if (loginCompleted && nextScreenAfterLogin) {
             console.log('Authentication completed, navigating to:', nextScreenAfterLogin);
@@ -105,9 +109,20 @@ export const ScreenTypeProvider = ({ children }: { children: ReactNode }) => {
             await store.delete('login_completed');
             await store.delete('next_screen_after_login');
             await store.save();
+            console.log('Login completion flags cleared');
+          } else {
+            console.log('No login completion flags found or incomplete data');
+            // フラグがない場合は強制的にSUBSCRIPTION画面に遷移
+            console.log('Forcing navigation to SUBSCRIPTION screen');
+            setScreenType('SUBSCRIPTION');
+            saveScreenTypeStore('SUBSCRIPTION');
           }
         } catch (error) {
           console.error('Error checking login completion:', error);
+          // エラーの場合も強制的にSUBSCRIPTION画面に遷移
+          console.log('Error occurred, forcing navigation to SUBSCRIPTION screen');
+          setScreenType('SUBSCRIPTION');
+          saveScreenTypeStore('SUBSCRIPTION');
         }
       };
 
