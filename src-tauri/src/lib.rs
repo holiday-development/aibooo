@@ -1,14 +1,389 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-use chrono::Local;
+use chrono::{Local, Utc, DateTime, Duration};
 use dotenvy_macro::dotenv;
+use serde::{Deserialize, Serialize};
 use std::env;
 use tauri::{App, AppHandle, Emitter, Manager};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_store::StoreExt;
 
+// AWS Cognito関連のimport (必要なものだけ残す)
+
+// Cognitoサービスモジュール
+mod cognito;
+use cognito::{CognitoService, SignUpResponse, SignInResponse, ConfirmSignUpResponse, CognitoError, UserAttributesResponse, UpdateAttributesResponse};
+
+// Stripe関連の環境変数
+const STRIPE_PUBLISHABLE_KEY: &str = dotenv!("STRIPE_PUBLISHABLE_KEY");
+const STRIPE_SECRET_KEY: &str = dotenv!("STRIPE_SECRET_KEY");
+const STRIPE_PRICE_WEEKLY: &str = dotenv!("STRIPE_PRICE_WEEKLY");
+const STRIPE_PRICE_MONTHLY: &str = dotenv!("STRIPE_PRICE_MONTHLY");
+
+// サブスクリプション関連の構造体
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SubscriptionInfo {
+    plan_type: String,
+    expires_at: Option<String>,
+    stripe_customer_id: Option<String>,
+    verification_token: Option<String>,
+    purchased_at: Option<String>,
+}
+
+impl Default for SubscriptionInfo {
+    fn default() -> Self {
+        Self {
+            plan_type: "free".to_string(),
+            expires_at: None,
+            stripe_customer_id: None,
+            verification_token: None,
+            purchased_at: None,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct SubscriptionStatus {
+    plan_type: String,
+    is_active: bool,
+    days_remaining: i64,
+    expires_at: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct StripeConfig {
+    publishable_key: String,
+    price_weekly: String,
+    price_monthly: String,
+}
+
+#[derive(Debug, Serialize)]
+struct CheckoutSessionResponse {
+    session_id: String,
+    url: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CreateCheckoutRequest {
+    price_id: String,
+    plan_type: String,
+    success_url: String,
+    cancel_url: String,
+}
+
+// サブスクリプション情報をストアから取得
+fn get_subscription_from_store(app_handle: &AppHandle) -> Result<SubscriptionInfo, String> {
+    let store = app_handle.store("usage.json").map_err(|e| {
+        format!("Store access error: {}", e)
+    })?;
+
+    if let Some(sub_value) = store.get("subscription") {
+        if let Ok(subscription) = serde_json::from_value::<SubscriptionInfo>(sub_value.clone()) {
+            return Ok(subscription);
+        }
+    }
+
+    Ok(SubscriptionInfo::default())
+}
+
+// サブスクリプション情報をストアに保存
+fn save_subscription_to_store(app_handle: &AppHandle, subscription: &SubscriptionInfo) -> Result<(), String> {
+    let store = app_handle.store("usage.json").map_err(|e| {
+        format!("Store access error: {}", e)
+    })?;
+
+    let sub_value = serde_json::to_value(subscription).map_err(|e| {
+        format!("Serialization error: {}", e)
+    })?;
+
+    store.set("subscription", sub_value);
+    store.save().map_err(|e| {
+        format!("Store save error: {}", e)
+    })?;
+
+    Ok(())
+}
+
+// サブスクリプションが有効かチェック
+fn is_subscription_active(subscription: &SubscriptionInfo) -> bool {
+    if subscription.plan_type == "free" {
+        return false;
+    }
+
+    if let Some(expires_str) = &subscription.expires_at {
+        if let Ok(expires_time) = DateTime::parse_from_rfc3339(expires_str) {
+            let now = Utc::now();
+            return expires_time > now;
+        }
+    }
+
+    false
+}
+
+// 残り日数を計算
+fn get_days_remaining(subscription: &SubscriptionInfo) -> i64 {
+    if let Some(expires_str) = &subscription.expires_at {
+        if let Ok(expires_time) = DateTime::parse_from_rfc3339(expires_str) {
+            let now = Utc::now();
+            let diff = expires_time.signed_duration_since(now);
+            return diff.num_days().max(0);
+        }
+    }
+    0
+}
+
+// サブスクリプション状態を取得するTauriコマンド
+#[tauri::command]
+async fn get_subscription_status(app_handle: AppHandle) -> Result<SubscriptionStatus, String> {
+    let subscription = get_subscription_from_store(&app_handle)?;
+    let is_active = is_subscription_active(&subscription);
+    let days_remaining = get_days_remaining(&subscription);
+
+    Ok(SubscriptionStatus {
+        plan_type: subscription.plan_type,
+        is_active,
+        days_remaining,
+        expires_at: subscription.expires_at,
+    })
+}
+
+// サブスクリプションを更新するTauriコマンド
+#[tauri::command]
+async fn update_subscription(
+    app_handle: AppHandle,
+    plan_type: String,
+    stripe_customer_id: String,
+    verification_token: Option<String>
+) -> Result<SubscriptionStatus, String> {
+    let mut subscription = SubscriptionInfo {
+        plan_type: plan_type.clone(),
+        stripe_customer_id: Some(stripe_customer_id),
+        verification_token,
+        purchased_at: Some(Utc::now().to_rfc3339()),
+        expires_at: None,
+    };
+
+    // 有効期限を計算
+    if plan_type == "weekly" {
+        let expires_at = Utc::now() + Duration::days(7);
+        subscription.expires_at = Some(expires_at.to_rfc3339());
+    } else if plan_type == "monthly" {
+        let expires_at = Utc::now() + Duration::days(30);
+        subscription.expires_at = Some(expires_at.to_rfc3339());
+    }
+
+    save_subscription_to_store(&app_handle, &subscription)?;
+
+    let plan_type_result = subscription.plan_type.clone();
+    let expires_at_result = subscription.expires_at.clone();
+    let is_active = is_subscription_active(&subscription);
+    let days_remaining = get_days_remaining(&subscription);
+
+    Ok(SubscriptionStatus {
+        plan_type: plan_type_result,
+        is_active,
+        days_remaining,
+        expires_at: expires_at_result,
+    })
+}
+
+// サブスクリプションをリセットするTauriコマンド
+#[tauri::command]
+async fn reset_subscription(app_handle: AppHandle) -> Result<SubscriptionStatus, String> {
+    let subscription = SubscriptionInfo::default();
+    save_subscription_to_store(&app_handle, &subscription)?;
+
+    Ok(SubscriptionStatus {
+        plan_type: subscription.plan_type,
+        is_active: false,
+        days_remaining: 0,
+        expires_at: None,
+    })
+}
+
+// サブスクリプションの有効性をチェックするTauriコマンド
+#[tauri::command]
+async fn check_subscription_validity(app_handle: AppHandle) -> Result<SubscriptionStatus, String> {
+    let subscription = get_subscription_from_store(&app_handle)?;
+
+    // 期限切れの場合は自動的にリセット
+    if !is_subscription_active(&subscription) && subscription.plan_type != "free" {
+        return reset_subscription(app_handle).await;
+    }
+
+    let plan_type = subscription.plan_type.clone();
+    let expires_at = subscription.expires_at.clone();
+    let is_active = is_subscription_active(&subscription);
+    let days_remaining = get_days_remaining(&subscription);
+
+    Ok(SubscriptionStatus {
+        plan_type,
+        is_active,
+        days_remaining,
+        expires_at,
+    })
+}
+
+// Stripe設定を取得するTauriコマンド
+#[tauri::command]
+fn get_stripe_config() -> Result<StripeConfig, String> {
+    println!("get_stripe_config called");
+    println!("STRIPE_PUBLISHABLE_KEY: {}", STRIPE_PUBLISHABLE_KEY);
+    println!("STRIPE_PRICE_WEEKLY: {}", STRIPE_PRICE_WEEKLY);
+    println!("STRIPE_PRICE_MONTHLY: {}", STRIPE_PRICE_MONTHLY);
+
+    let config = StripeConfig {
+        publishable_key: STRIPE_PUBLISHABLE_KEY.to_string(),
+        price_weekly: STRIPE_PRICE_WEEKLY.to_string(),
+        price_monthly: STRIPE_PRICE_MONTHLY.to_string(),
+    };
+
+    println!("Returning config: {:?}", config);
+    Ok(config)
+}
+
+// Stripe Checkout セッションを作成するTauriコマンド
+#[tauri::command]
+async fn create_checkout_session(request: CreateCheckoutRequest) -> Result<CheckoutSessionResponse, String> {
+    let client = reqwest::Client::new();
+
+    // Stripe Checkout Session作成のパラメータ
+    let params = [
+        ("line_items[0][price]", request.price_id.as_str()),
+        ("line_items[0][quantity]", "1"),
+        ("mode", "subscription"), // 継続課金に変更
+        ("success_url", &format!("{}?session_id={{CHECKOUT_SESSION_ID}}&plan_type={}", request.success_url, request.plan_type)),
+        ("cancel_url", &format!("{}?plan_type={}", request.cancel_url, request.plan_type)),
+        // Stripe Link を有効にする設定
+        ("payment_method_types[0]", "card"),
+        ("payment_method_types[1]", "link"),
+        ("allow_promotion_codes", "true"),
+    ];
+
+    let response = client
+        .post("https://api.stripe.com/v1/checkout/sessions")
+        .basic_auth(STRIPE_SECRET_KEY, Some(""))
+        .form(&params)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send request: {}", e))?;
+
+    if !response.status().is_success() {
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_default();
+        return Err(format!("Stripe API error: {}", error_text));
+    }
+
+    let response_json: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+    let session_id = response_json["id"]
+        .as_str()
+        .ok_or("Missing session ID in response")?
+        .to_string();
+
+    let checkout_url = response_json["url"]
+        .as_str()
+        .ok_or("Missing URL in response")?
+        .to_string();
+
+    Ok(CheckoutSessionResponse {
+        session_id,
+        url: checkout_url,
+    })
+}
+
 static GENERATION_LIMIT: u64 = 20;
 const API_URL: &str = dotenv!("API_URL");
+
+// AWS Cognito設定
+// const AWS_REGION: &str = dotenv!("AWS_REGION"); // 現在未使用のため削除
+const COGNITO_USER_POOL_ID: &str = dotenv!("COGNITO_USER_POOL_ID");
+const COGNITO_CLIENT_ID: &str = dotenv!("COGNITO_CLIENT_ID");
+
+// Cognitoサービスのインスタンスを作成するヘルパー関数
+async fn create_cognito_service() -> Result<CognitoService, CognitoError> {
+    CognitoService::new(
+        COGNITO_USER_POOL_ID.to_string(),
+        COGNITO_CLIENT_ID.to_string()
+    ).await
+}
+
+// ユーザー登録用のTauriコマンド
+#[tauri::command]
+async fn register_user(email: String, password: String) -> Result<SignUpResponse, String> {
+    let cognito_service = create_cognito_service().await
+        .map_err(|e| format!("Cognitoサービスの初期化に失敗しました: {}", e))?;
+
+    cognito_service.sign_up(&email, &password).await
+        .map_err(|e| format!("ユーザー登録に失敗しました: {}", e))
+}
+
+// メール認証確認用のTauriコマンド
+#[tauri::command]
+async fn verify_email(email: String, confirmation_code: String) -> Result<ConfirmSignUpResponse, String> {
+    let cognito_service = create_cognito_service().await
+        .map_err(|e| format!("Cognitoサービスの初期化に失敗しました: {}", e))?;
+
+    cognito_service.confirm_sign_up(&email, &confirmation_code).await
+        .map_err(|e| format!("メール認証に失敗しました: {}", e))
+}
+
+// ログイン用のTauriコマンド
+#[tauri::command]
+async fn login_user(email: String, password: String) -> Result<SignInResponse, String> {
+    let cognito_service = create_cognito_service().await
+        .map_err(|e| format!("Cognitoサービスの初期化に失敗しました: {}", e))?;
+
+    cognito_service.sign_in(&email, &password).await
+        .map_err(|e| format!("ログインに失敗しました: {}", e))
+}
+
+// メール認証とログインを同時に行うコマンド
+#[derive(serde::Deserialize)]
+struct VerifyEmailAndLoginRequest {
+    email: String,
+    password: String,
+    confirmation_code: String,
+}
+
+#[tauri::command]
+async fn verify_email_and_login(request: VerifyEmailAndLoginRequest) -> Result<SignInResponse, String> {
+    let cognito_service = create_cognito_service().await
+        .map_err(|e| format!("Cognitoサービスの初期化に失敗しました: {}", e))?;
+
+    cognito_service.confirm_sign_up_and_sign_in(&request.email, &request.password, &request.confirmation_code).await
+        .map_err(|e| format!("メール認証とログインに失敗しました: {}", e))
+}
+
+// 認証状態をチェックするヘルパー関数
+fn is_user_authenticated(app_handle: &tauri::AppHandle) -> bool {
+    let store = match app_handle.store("auth.json") {
+        Ok(store) => store,
+        Err(_) => return false,
+    };
+
+    let tokens = match store.get("tokens") {
+        Some(tokens) => tokens,
+        None => return false,
+    };
+
+    // トークンの有効期限をチェック
+    if let Some(expires_at) = tokens.get("expires_at").and_then(|v| v.as_u64()) {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+
+        expires_at > now
+    } else {
+        false
+    }
+}
 
 #[tauri::command]
 async fn convert_text(
@@ -16,31 +391,34 @@ async fn convert_text(
     type_: &str,
     app_handle: tauri::AppHandle,
 ) -> Result<String, String> {
-    // 利用回数制限のためのストア取得
-    let store = app_handle.store("usage.json").map_err(|e| {
-        serde_json::json!({"type": "store_error", "message": e.to_string()}).to_string()
-    })?;
-    let today = Local::now().format("%Y-%m-%d").to_string();
-    let mut request_count = store
-        .get("request_count")
-        .and_then(|v| v.as_object().cloned())
-        .unwrap_or_default();
-    let count = request_count
-        .get(&today)
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0);
-    if count >= GENERATION_LIMIT {
-        return Err(serde_json::json!({
-            "type": "limit_exceeded",
-            "message": format!("本日の利用回数上限（{}回）に達しました", GENERATION_LIMIT)
-        })
-        .to_string());
+    // 認証済みユーザーは制限をスキップ
+    if !is_user_authenticated(&app_handle) {
+        // 利用回数制限のためのストア取得
+        let store = app_handle.store("usage.json").map_err(|e| {
+            serde_json::json!({"type": "store_error", "message": e.to_string()}).to_string()
+        })?;
+        let today = Local::now().format("%Y-%m-%d").to_string();
+        let mut request_count = store
+            .get("request_count")
+            .and_then(|v| v.as_object().cloned())
+            .unwrap_or_default();
+        let count = request_count
+            .get(&today)
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        if count >= GENERATION_LIMIT {
+            return Err(serde_json::json!({
+                "type": "limit_exceeded",
+                "message": format!("本日の利用回数上限（{}回）に達しました", GENERATION_LIMIT)
+            })
+            .to_string());
+        }
+        request_count.insert(today.clone(), serde_json::json!(count + 1));
+        store.set("request_count", serde_json::json!(request_count));
+        store.save().map_err(|e| {
+            serde_json::json!({"type": "store_error", "message": e.to_string()}).to_string()
+        })?;
     }
-    request_count.insert(today.clone(), serde_json::json!(count + 1));
-    store.set("request_count", serde_json::json!(request_count));
-    store.save().map_err(|e| {
-        serde_json::json!({"type": "store_error", "message": e.to_string()}).to_string()
-    })?;
 
     println!(
         "convert_text関数が呼び出されました: テキスト長さ {}",
@@ -94,6 +472,34 @@ async fn convert_text(
         })
         .to_string())
     }
+}
+
+// Cognitoユーザー属性からサブスクリプション情報を取得
+#[tauri::command]
+async fn get_user_subscription_from_cognito(access_token: String) -> Result<UserAttributesResponse, String> {
+    let cognito_service = create_cognito_service().await
+        .map_err(|e| format!("Cognitoサービスの初期化に失敗しました: {}", e))?;
+
+    cognito_service.get_user_attributes(&access_token).await
+        .map_err(|e| format!("ユーザー属性の取得に失敗しました: {}", e))
+}
+
+// Cognitoユーザー属性のサブスクリプション情報を更新
+#[tauri::command]
+async fn update_user_subscription_in_cognito(
+    access_token: String,
+    subscription_plan: Option<String>,
+    subscription_expires_at: Option<String>
+) -> Result<UpdateAttributesResponse, String> {
+    let cognito_service = create_cognito_service().await
+        .map_err(|e| format!("Cognitoサービスの初期化に失敗しました: {}", e))?;
+
+    cognito_service.update_user_attributes(
+        &access_token,
+        subscription_plan.as_deref(),
+        subscription_expires_at.as_deref()
+    ).await
+    .map_err(|e| format!("ユーザー属性の更新に失敗しました: {}", e))
 }
 
 // JSからの呼び出し用のエントリーポイント
@@ -221,7 +627,7 @@ pub fn run() {
             println!("セットアップ完了");
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![convert_text, process_clipboard])
+        .invoke_handler(tauri::generate_handler![convert_text, process_clipboard, register_user, verify_email, login_user, verify_email_and_login, get_user_subscription_from_cognito, update_user_subscription_in_cognito, get_subscription_status, update_subscription, reset_subscription, check_subscription_validity, get_stripe_config, create_checkout_session])
         .on_window_event(|window, event| {
             use tauri::WindowEvent;
             if let WindowEvent::CloseRequested { api, .. } = event {

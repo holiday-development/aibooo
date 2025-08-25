@@ -10,12 +10,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { RefreshCcw } from 'lucide-react';
+import { RefreshCcw, LogOut } from 'lucide-react';
 import { ClipboardTextarea } from '../components/ui/clipboard-textarea';
 import { MaxLengthTextarea } from '@/components/ui/max-length-textarea';
 import { toast } from 'sonner';
 import { load } from '@tauri-apps/plugin-store';
 import { useScreenType } from '@/contexts/use-screen-type';
+import { useAuth } from '@/contexts/use-auth';
 
 const MAX_LENGTH = 1000;
 
@@ -34,6 +35,7 @@ export function Generator() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [convertType, setConvertType] = useState<ConvertType>('translate');
   const { switchScreenType } = useScreenType();
+  const { isAuthenticated, userEmail, logout } = useAuth();
 
   async function loadConvertTypeStore() {
     const store = await load('usage.json');
@@ -108,9 +110,39 @@ export function Generator() {
     }
   }, [convertType]);
 
+  // const handleLogout = async () => {
+  //   try {
+  //     await logout();
+  //     toast.success('ログアウトしました');
+  //   } catch (error) {
+  //     toast.error('ログアウトに失敗しました');
+  //   }
+  // };
+
   return (
     <>
       <div className="flex flex-col gap-2 w-full">
+        {/* 認証状態の表示 */}
+        {isAuthenticated && (
+          <div className="flex items-center justify-between p-2 bg-green-50 rounded-lg border border-green-200">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <span className="text-sm text-green-700">
+                プレミアムユーザー: {userEmail}
+              </span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={logout}
+              className="flex items-center gap-1 text-green-700 hover:text-green-800"
+            >
+              <LogOut className="size-3" />
+              ログアウト
+            </Button>
+          </div>
+        )}
+
         <Select value={convertType} onValueChange={onConvertTypeChange}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="校閲する" />
