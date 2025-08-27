@@ -488,7 +488,8 @@ async fn check_premium_membership(app_handle: &tauri::AppHandle) -> Result<bool,
                 };
 
                 // トークンをリフレッシュ
-                match cognito_service.refresh_token(refresh_token).await as Result<RefreshTokenResponse, _> {
+                let refresh_result: Result<RefreshTokenResponse, _> = cognito_service.refresh_token(refresh_token).await;
+                match refresh_result {
                     Ok(refresh_response) => {
                         println!("トークンリフレッシュ成功");
 
