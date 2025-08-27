@@ -1,21 +1,58 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useSubscription } from '@/contexts/use-subscription';
 import { useScreenType } from '@/contexts/use-screen-type';
+import { useAuth } from '@/contexts/use-auth';
 import { SUBSCRIPTION_PLANS, PlanType } from '@/types/subscription';
 import { Check, Crown, ArrowLeft, CreditCard, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { createCheckoutSession, getPriceId } from '@/lib/stripe';
+import { getSubscriptionFromCognito } from '@/lib/subscription';
 
 export function Subscription() {
   const [selectedPlan, setSelectedPlan] = useState<PlanType | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
-  const { subscription, updatePlan: _updatePlan, resetPlan } = useSubscription();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const { subscription, updatePlan: _updatePlan, resetPlan, refreshSubscription } = useSubscription();
+  const { tokens } = useAuth();
   const isActive = subscription?.is_active || false;
   const daysRemaining = subscription?.days_remaining || 0;
   const { switchScreenType } = useScreenType();
+
+  // Cognitoから最新のサブスクリプション状態を取得
+  const refreshFromCognito = async (showSuccessMessage = false) => {
+    if (!tokens?.access_token) return;
+    
+    try {
+      setIsRefreshing(true);
+      console.log('Cognitoからサブスクリプション状態を更新中...');
+      
+      // Cognitoから最新のサブスクリプション情報を取得
+      const cognitoSubscription = await getSubscriptionFromCognito(tokens.access_token);
+      console.log('Cognito subscription data:', cognitoSubscription);
+      
+      // ローカルサブスクリプション状態を更新
+      await refreshSubscription();
+      
+      if (showSuccessMessage) {
+        toast.success('プラン情報を更新しました');
+      }
+    } catch (error) {
+      console.error('Failed to refresh from Cognito:', error);
+      toast.error('プラン情報の更新に失敗しました');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // 画面表示時とトークン更新時にCognitoから状態を取得
+  useEffect(() => {
+    if (tokens?.access_token) {
+      refreshFromCognito();
+    }
+  }, [tokens?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePlanSelect = (planType: PlanType) => {
     setSelectedPlan(planType);
