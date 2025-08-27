@@ -54,6 +54,83 @@ export function Subscription() {
     }
   }, [tokens?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Stripe決済完了時の処理（URL hash や localStorage を監視）
+  useEffect(() => {
+    const checkPaymentCompletion = async () => {
+      try {
+        // URLハッシュから決済完了情報を確認
+        const hash = window.location.hash;
+        if (hash.includes('payment-success')) {
+          console.log('決済完了を検知しました');
+          
+          // URLハッシュからプラン情報を取得
+          const urlParams = new URLSearchParams(hash.substring(1));
+          const planType = urlParams.get('plan') as PlanType;
+          const sessionId = urlParams.get('session_id');
+          
+          if (planType && sessionId) {
+            console.log('決済完了処理開始:', { planType, sessionId });
+            
+            // update_subscriptionを実行
+            try {
+              await _updatePlan(planType, sessionId);
+              toast.success(`${planType}プランの決済が完了しました！`);
+              
+              // ハッシュをクリア
+              window.location.hash = '';
+              
+              // サブスクリプション状態を更新
+              await refreshSubscription();
+            } catch (error) {
+              console.error('決済完了処理エラー:', error);
+              toast.error('決済は完了しましたが、プラン設定に失敗しました。サポートにお問い合わせください。');
+            }
+          }
+        }
+        
+        // LocalStorageからの決済完了フラグもチェック
+        const paymentCompleted = localStorage.getItem('stripe_payment_completed');
+        const completedPlan = localStorage.getItem('stripe_completed_plan');
+        const completedCustomerId = localStorage.getItem('stripe_customer_id');
+        
+        if (paymentCompleted === 'true' && completedPlan && completedCustomerId) {
+          console.log('localStorage決済完了を検知:', { completedPlan, completedCustomerId });
+          
+          try {
+            await _updatePlan(completedPlan as PlanType, completedCustomerId);
+            toast.success(`${completedPlan}プランの決済が完了しました！`);
+            
+            // LocalStorageをクリア
+            localStorage.removeItem('stripe_payment_completed');
+            localStorage.removeItem('stripe_completed_plan');
+            localStorage.removeItem('stripe_customer_id');
+            
+            await refreshSubscription();
+          } catch (error) {
+            console.error('決済完了処理エラー:', error);
+            toast.error('決済は完了しましたが、プラン設定に失敗しました。サポートにお問い合わせください。');
+          }
+        }
+      } catch (error) {
+        console.error('決済完了チェックエラー:', error);
+      }
+    };
+
+    // 画面表示時に決済完了をチェック
+    checkPaymentCompletion();
+    
+    // hashchange イベントで決済完了を監視
+    const handleHashChange = () => {
+      checkPaymentCompletion();
+    };
+    
+    window.addEventListener('hashchange', handleHashChange);
+    
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange);
+    };
+  }, [_updatePlan, refreshSubscription]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
 
   const handlePlanSelect = (planType: PlanType) => {
@@ -67,13 +144,18 @@ export function Subscription() {
       const priceId = await getPriceId(planType);
       console.log('価格ID取得成功:', priceId);
 
+      // 決済情報をLocalStorageに保存（決済完了時の検知用）
+      localStorage.setItem('stripe_pending_plan', planType);
+      
       // Stripe Checkout セッションを作成
-      await createCheckoutSession({
+      const checkoutResult = await createCheckoutSession({
         priceId,
         planType,
-        successUrl: window.location.origin + '/payment-success',
-        cancelUrl: window.location.origin + '/payment-cancel'
+        successUrl: window.location.origin + '/#payment-success?plan=' + planType,
+        cancelUrl: window.location.origin + '/#payment-cancel'
       });
+      
+      console.log('Stripe Checkout セッション作成完了:', checkoutResult);
 
       // createCheckoutSession内でredirectToCheckoutが実行されるため、
       // 正常時はここに到達しません（ページ遷移が発生）
