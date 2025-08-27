@@ -416,6 +416,19 @@ async fn check_premium_membership(app_handle: &tauri::AppHandle) -> Result<bool,
         None => return Ok(false), // アクセストークンがない場合は無料
     };
 
+    // トークンの有効期限をチェック
+    if let Some(expires_at) = auth_data.get("expires_at").and_then(|v| v.as_u64()) {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        
+        if now >= expires_at {
+            println!("アクセストークンが期限切れです。無料として処理します。");
+            return Ok(false);
+        }
+    }
+
     // Cognitoサービスを初期化
     let cognito_service = match create_cognito_service().await {
         Ok(service) => service,
@@ -429,7 +442,12 @@ async fn check_premium_membership(app_handle: &tauri::AppHandle) -> Result<bool,
     let user_attrs = match cognito_service.get_user_attributes(access_token).await {
         Ok(attrs) => attrs,
         Err(e) => {
-            println!("ユーザー属性の取得に失敗: {}", e);
+            let error_str = format!("{:?}", e);
+            if error_str.contains("Access Token has expired") || error_str.contains("NotAuthorizedException") {
+                println!("認証トークンが無効または期限切れです。無料として処理します。");
+            } else {
+                println!("ユーザー属性の取得に失敗: {}", e);
+            }
             return Ok(false); // エラーの場合は無料として扱う
         }
     };
