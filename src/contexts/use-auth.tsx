@@ -107,7 +107,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      const storedTokens = await store.get('tokens') as AuthTokens | null;
+      const storedTokens = await store.get('auth') as AuthTokens | null;
       console.log('Stored tokens:', storedTokens);
 
       if (storedTokens && storedTokens.expires_at) {
@@ -187,7 +187,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // トークンを保存
       const store = await load('auth.json');
-      await store.set('tokens', newTokens);
+      await store.set('auth', newTokens);
       await store.save();
 
       setTokens(newTokens);
@@ -221,7 +221,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       // ストアからトークンを削除
       const store = await load('auth.json');
-      await store.delete('tokens');
+      await store.delete('auth');
       await store.save();
 
       setTokens(null);

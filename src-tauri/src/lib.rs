@@ -472,10 +472,10 @@ async fn check_premium_membership(app_handle: &tauri::AppHandle) -> Result<bool,
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_millis() as u64;
-        
+
         if now >= expires_at {
             println!("アクセストークンが期限切れです。リフレッシュを試行します。");
-            
+
             // リフレッシュトークンを取得
             if let Some(refresh_token) = auth_data.get("refresh_token").and_then(|v| v.as_str()) {
                 // Cognitoサービスを初期化
@@ -488,17 +488,17 @@ async fn check_premium_membership(app_handle: &tauri::AppHandle) -> Result<bool,
                 };
 
                 // トークンをリフレッシュ
-                match cognito_service.refresh_token(refresh_token).await {
+                match cognito_service.refresh_token(refresh_token).await as Result<RefreshTokenResponse, _> {
                     Ok(refresh_response) => {
                         println!("トークンリフレッシュ成功");
-                        
+
                         // 新しいトークン情報を保存
                         let new_expires_at = now + (refresh_response.expires_in as u64 * 1000);
                         let mut new_auth_data = auth_data.as_object().unwrap().clone();
                         new_auth_data.insert("access_token".to_string(), serde_json::Value::String(refresh_response.access_token.clone()));
                         new_auth_data.insert("id_token".to_string(), serde_json::Value::String(refresh_response.id_token));
                         new_auth_data.insert("expires_at".to_string(), serde_json::Value::Number(serde_json::Number::from(new_expires_at)));
-                        
+
                         store.set("auth", serde_json::Value::Object(new_auth_data));
                         if let Err(e) = store.save() {
                             println!("トークン保存エラー: {}", e);
