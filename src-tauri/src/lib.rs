@@ -422,7 +422,7 @@ async fn check_premium_membership(app_handle: &tauri::AppHandle) -> Result<bool,
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_millis() as u64;
-        
+
         if now >= expires_at {
             println!("アクセストークンが期限切れです。無料として処理します。");
             return Ok(false);
@@ -475,31 +475,6 @@ async fn check_premium_membership(app_handle: &tauri::AppHandle) -> Result<bool,
     }
 
     Ok(false) // デフォルトは無料
-}
-
-// 認証状態をチェックするヘルパー関数
-fn is_user_authenticated(app_handle: &tauri::AppHandle) -> bool {
-    let store = match app_handle.store("auth.json") {
-        Ok(store) => store,
-        Err(_) => return false,
-    };
-
-    let tokens = match store.get("tokens") {
-        Some(tokens) => tokens,
-        None => return false,
-    };
-
-    // トークンの有効期限をチェック
-    if let Some(expires_at) = tokens.get("expires_at").and_then(|v| v.as_u64()) {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64;
-
-        expires_at > now
-    } else {
-        false
-    }
 }
 
 #[tauri::command]
