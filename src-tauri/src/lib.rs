@@ -196,6 +196,7 @@ async fn update_subscription(
 ) -> Result<SubscriptionStatus, String> {
     let mut subscription = SubscriptionInfo {
         plan_type: plan_type.clone(),
+        membership_status: Some("premium".to_string()),
         stripe_customer_id: Some(stripe_customer_id),
         verification_token,
         purchased_at: Some(Utc::now().to_rfc3339()),
@@ -405,12 +406,12 @@ async fn check_premium_membership(app_handle: &tauri::AppHandle) -> Result<bool,
         format!("認証ストアの取得に失敗しました: {}", e)
     })?;
 
-    let tokens = match store.get("tokens") {
-        Some(tokens) => tokens,
+    let auth_data = match store.get("auth") {
+        Some(auth) => auth,
         None => return Ok(false), // 認証されていない場合は無料
     };
 
-    let access_token = match tokens.get("access_token").and_then(|v| v.as_str()) {
+    let access_token = match auth_data.get("access_token").and_then(|v| v.as_str()) {
         Some(token) => token,
         None => return Ok(false), // アクセストークンがない場合は無料
     };
@@ -600,9 +601,15 @@ async fn update_user_subscription_in_cognito(
     let cognito_service = create_cognito_service().await
         .map_err(|e| format!("Cognitoサービスの初期化に失敗しました: {}", e))?;
 
+    // subscription_planに基づいてmembership_statusを決定
+    let membership_status = match subscription_plan.as_deref() {
+        Some("weekly") | Some("monthly") => Some("premium"),
+        _ => Some("free"),
+    };
+
     cognito_service.update_user_attributes(
         &access_token,
-        None, // membership_status - この関数では更新しない
+        membership_status,
         subscription_plan.as_deref(),
         subscription_expires_at.as_deref()
     ).await
