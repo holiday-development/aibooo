@@ -45,17 +45,17 @@ async function waitForTauriApi(maxWaitTime = 20000): Promise<boolean> {
     attempt++;
     console.log(`Tauri API チェック試行 #${attempt}`);
     console.log('window:', typeof window);
-    console.log('window.__TAURI__:', typeof window.__TAURI__);
+    console.log('window.__TAURI__:', typeof (window as any).__TAURI__);
     console.log('__TAURI__ in window:', '__TAURI__' in window);
     console.log('window.location.href:', window.location.href);
 
     if (typeof window !== 'undefined') {
-      console.log('window.__TAURI__ exists:', !!window.__TAURI__);
-      console.log('window.__TAURI_INTERNALS__ exists:', !!window.__TAURI_INTERNALS__);
-      console.log('window.__TAURI_PLUGIN_INVOKE__ exists:', !!window.__TAURI_PLUGIN_INVOKE__);
+      console.log('window.__TAURI__ exists:', !!(window as any).__TAURI__);
+      console.log('window.__TAURI_INTERNALS__ exists:', !!(window as any).__TAURI_INTERNALS__);
+      console.log('window.__TAURI_PLUGIN_INVOKE__ exists:', !!(window as any).__TAURI_PLUGIN_INVOKE__);
 
       // Tauri v2では __TAURI__ オブジェクトと invoke 関数の存在を確認
-      if ('__TAURI__' in window && window.__TAURI__ && typeof invoke === 'function') {
+      if ('__TAURI__' in window && (window as any).__TAURI__ && typeof invoke === 'function') {
         console.log('Tauri API が利用可能になりました');
         return true;
       }
@@ -81,7 +81,7 @@ async function waitForTauriApi(maxWaitTime = 20000): Promise<boolean> {
   console.log('  Location:', window.location.href);
   console.log('  window:', typeof window);
   console.log('  __TAURI__ in window:', '__TAURI__' in window);
-  console.log('  window.__TAURI__:', typeof window.__TAURI__);
+  console.log('  window.__TAURI__:', typeof (window as any).__TAURI__);
   console.log('  invoke function:', typeof invoke);
   return false;
 }
@@ -198,8 +198,8 @@ export async function getPriceId(planType: PlanType): Promise<string> {
   console.log('Location:', window.location);
   console.log('Window object keys:', Object.keys(window));
   console.log('window.__TAURI__ exists:', '__TAURI__' in window);
-  console.log('window.__TAURI__ type:', typeof window.__TAURI__);
-  console.log('window.__TAURI__ value:', window.__TAURI__);
+  console.log('window.__TAURI__ type:', typeof (window as any).__TAURI__);
+  console.log('window.__TAURI__ value:', (window as any).__TAURI__);
   console.log('window.__TAURI_INTERNALS__ exists:', '__TAURI_INTERNALS__' in window);
   console.log('========================');
 

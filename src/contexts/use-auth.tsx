@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { load } from '@tauri-apps/plugin-store';
 import { invoke } from '@tauri-apps/api/core';
-import { getSubscriptionFromCognito, updateSubscriptionInCognito, isSubscriptionActive } from '@/lib/subscription';
+import { getSubscriptionFromCognito, updateSubscriptionInCognito } from '@/lib/subscription';
 import { saveSubscription, getSubscription } from '@/lib/storage';
 
 interface AuthTokens {
