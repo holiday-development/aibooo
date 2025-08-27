@@ -12,7 +12,7 @@ use tauri_plugin_store::StoreExt;
 
 // Cognitoサービスモジュール
 mod cognito;
-use cognito::{CognitoService, SignUpResponse, SignInResponse, ConfirmSignUpResponse, CognitoError, UserAttributesResponse, UpdateAttributesResponse};
+use cognito::{CognitoService, SignUpResponse, SignInResponse, ConfirmSignUpResponse, CognitoError, UserAttributesResponse, UpdateAttributesResponse, RefreshTokenResponse};
 
 // Stripe関連の環境変数
 const STRIPE_PUBLISHABLE_KEY: &str = dotenv!("STRIPE_PUBLISHABLE_KEY");
@@ -400,35 +400,8 @@ async fn verify_email_and_login(request: VerifyEmailAndLoginRequest) -> Result<S
         .map_err(|e| format!("メール認証とログインに失敗しました: {}", e))
 }
 
-// プレミアム会員かどうかをチェックする関数
-async fn check_premium_membership(app_handle: &tauri::AppHandle) -> Result<bool, String> {
-    let store = app_handle.store("auth.json").map_err(|e| {
-        format!("認証ストアの取得に失敗しました: {}", e)
-    })?;
-
-    let auth_data = match store.get("auth") {
-        Some(auth) => auth,
-        None => return Ok(false), // 認証されていない場合は無料
-    };
-
-    let access_token = match auth_data.get("access_token").and_then(|v| v.as_str()) {
-        Some(token) => token,
-        None => return Ok(false), // アクセストークンがない場合は無料
-    };
-
-    // トークンの有効期限をチェック
-    if let Some(expires_at) = auth_data.get("expires_at").and_then(|v| v.as_u64()) {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64;
-
-        if now >= expires_at {
-            println!("アクセストークンが期限切れです。無料として処理します。");
-            return Ok(false);
-        }
-    }
-
+// アクセストークンを使って会員ステータスをチェックするヘルパー関数
+async fn check_premium_membership_with_token(access_token: &str) -> Result<bool, String> {
     // Cognitoサービスを初期化
     let cognito_service = match create_cognito_service().await {
         Ok(service) => service,
@@ -475,6 +448,81 @@ async fn check_premium_membership(app_handle: &tauri::AppHandle) -> Result<bool,
     }
 
     Ok(false) // デフォルトは無料
+}
+
+// プレミアム会員かどうかをチェックする関数
+async fn check_premium_membership(app_handle: &tauri::AppHandle) -> Result<bool, String> {
+    let store = app_handle.store("auth.json").map_err(|e| {
+        format!("認証ストアの取得に失敗しました: {}", e)
+    })?;
+
+    let auth_data = match store.get("auth") {
+        Some(auth) => auth,
+        None => return Ok(false), // 認証されていない場合は無料
+    };
+
+    let access_token = match auth_data.get("access_token").and_then(|v| v.as_str()) {
+        Some(token) => token,
+        None => return Ok(false), // アクセストークンがない場合は無料
+    };
+
+        // トークンの有効期限をチェックし、必要に応じてリフレッシュ
+    if let Some(expires_at) = auth_data.get("expires_at").and_then(|v| v.as_u64()) {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        
+        if now >= expires_at {
+            println!("アクセストークンが期限切れです。リフレッシュを試行します。");
+            
+            // リフレッシュトークンを取得
+            if let Some(refresh_token) = auth_data.get("refresh_token").and_then(|v| v.as_str()) {
+                // Cognitoサービスを初期化
+                let cognito_service = match create_cognito_service().await {
+                    Ok(service) => service,
+                    Err(e) => {
+                        println!("Cognitoサービスの初期化に失敗: {}", e);
+                        return Ok(false);
+                    }
+                };
+
+                // トークンをリフレッシュ
+                match cognito_service.refresh_token(refresh_token).await {
+                    Ok(refresh_response) => {
+                        println!("トークンリフレッシュ成功");
+                        
+                        // 新しいトークン情報を保存
+                        let new_expires_at = now + (refresh_response.expires_in as u64 * 1000);
+                        let mut new_auth_data = auth_data.as_object().unwrap().clone();
+                        new_auth_data.insert("access_token".to_string(), serde_json::Value::String(refresh_response.access_token.clone()));
+                        new_auth_data.insert("id_token".to_string(), serde_json::Value::String(refresh_response.id_token));
+                        new_auth_data.insert("expires_at".to_string(), serde_json::Value::Number(serde_json::Number::from(new_expires_at)));
+                        
+                        store.set("auth", serde_json::Value::Object(new_auth_data));
+                        if let Err(e) = store.save() {
+                            println!("トークン保存エラー: {}", e);
+                            return Ok(false);
+                        }
+
+                        // 更新されたアクセストークンを使用
+                        let access_token = refresh_response.access_token;
+                        return check_premium_membership_with_token(&access_token).await;
+                    }
+                    Err(e) => {
+                        println!("トークンリフレッシュに失敗: {}", e);
+                        return Ok(false);
+                    }
+                }
+            } else {
+                println!("リフレッシュトークンが見つかりません。無料として処理します。");
+                return Ok(false);
+            }
+        }
+    }
+
+    // 有効なアクセストークンで会員ステータスをチェック
+    check_premium_membership_with_token(access_token).await
 }
 
 #[tauri::command]

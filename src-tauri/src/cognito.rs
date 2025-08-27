@@ -38,6 +38,14 @@ pub struct SignInResponse {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct RefreshTokenResponse {
+    pub access_token: String,
+    pub id_token: String,
+    pub token_type: String,
+    pub expires_in: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ConfirmSignUpResponse {
     pub success: bool,
     pub message: String,
@@ -411,6 +419,70 @@ impl CognitoService {
         Ok(UpdateAttributesResponse {
             success: true,
             message: "ユーザー属性が正常に更新されました。".to_string(),
+        })
+    }
+
+    // リフレッシュトークンを使ってアクセストークンを更新
+    pub async fn refresh_token(&self, refresh_token: &str) -> Result<RefreshTokenResponse, CognitoError> {
+        println!("Starting token refresh");
+
+        let auth_result = self
+            .client
+            .initiate_auth()
+            .auth_flow(AuthFlowType::RefreshTokenAuth)
+            .client_id(&self.client_id)
+            .auth_parameters("REFRESH_TOKEN", refresh_token)
+            .send()
+            .await
+            .map_err(|e| {
+                println!("Cognito refresh_token error: {:?}", e);
+
+                let error_string = format!("{:?}", e);
+                let user_message = if error_string.contains("NotAuthorizedException") {
+                    "リフレッシュトークンが無効です。再度ログインしてください。"
+                } else if error_string.contains("TokenExpiredException") {
+                    "リフレッシュトークンが期限切れです。再度ログインしてください。"
+                } else {
+                    "トークンの更新に失敗しました。"
+                };
+
+                CognitoError {
+                    error_type: "refresh_token_error".to_string(),
+                    message: user_message.to_string(),
+                }
+            })?;
+
+        let auth_result = auth_result.authentication_result()
+            .ok_or_else(|| CognitoError {
+                error_type: "auth_error".to_string(),
+                message: "認証結果が取得できませんでした".to_string(),
+            })?;
+
+        let access_token = auth_result.access_token()
+            .ok_or_else(|| CognitoError {
+                error_type: "token_error".to_string(),
+                message: "アクセストークンが取得できませんでした".to_string(),
+            })?.to_string();
+
+        let id_token = auth_result.id_token()
+            .ok_or_else(|| CognitoError {
+                error_type: "token_error".to_string(),
+                message: "IDトークンが取得できませんでした".to_string(),
+            })?.to_string();
+
+        let token_type = auth_result.token_type()
+            .unwrap_or_default()
+            .to_string();
+
+        let expires_in = auth_result.expires_in();
+
+        println!("Token refresh successful");
+
+        Ok(RefreshTokenResponse {
+            access_token,
+            id_token,
+            token_type,
+            expires_in,
         })
     }
 }
