@@ -399,6 +399,65 @@ async fn verify_email_and_login(request: VerifyEmailAndLoginRequest) -> Result<S
         .map_err(|e| format!("メール認証とログインに失敗しました: {}", e))
 }
 
+// プレミアム会員かどうかをチェックする関数
+async fn check_premium_membership(app_handle: &tauri::AppHandle) -> Result<bool, String> {
+    let store = app_handle.store("auth.json").map_err(|e| {
+        format!("認証ストアの取得に失敗しました: {}", e)
+    })?;
+
+    let tokens = match store.get("tokens") {
+        Some(tokens) => tokens,
+        None => return Ok(false), // 認証されていない場合は無料
+    };
+
+    let access_token = match tokens.get("access_token").and_then(|v| v.as_str()) {
+        Some(token) => token,
+        None => return Ok(false), // アクセストークンがない場合は無料
+    };
+
+    // Cognitoサービスを初期化
+    let cognito_service = match create_cognito_service().await {
+        Ok(service) => service,
+        Err(e) => {
+            println!("Cognitoサービスの初期化に失敗: {}", e);
+            return Ok(false); // エラーの場合は安全側に倒して無料として扱う
+        }
+    };
+
+    // ユーザー属性を取得
+    let user_attrs = match cognito_service.get_user_attributes(access_token).await {
+        Ok(attrs) => attrs,
+        Err(e) => {
+            println!("ユーザー属性の取得に失敗: {}", e);
+            return Ok(false); // エラーの場合は無料として扱う
+        }
+    };
+
+    // membership_statusをチェック
+    if let Some(membership_status) = user_attrs.membership_status {
+        if membership_status == "premium" || membership_status == "business" {
+            // 有料プランの場合、有効期限もチェック
+            if let Some(expires_at) = user_attrs.subscription_expires_at {
+                match DateTime::parse_from_rfc3339(&expires_at) {
+                    Ok(expiry) => {
+                        let now = Utc::now();
+                        return Ok(expiry > now);
+                    }
+                    Err(_) => {
+                        println!("無効な有効期限形式: {}", expires_at);
+                        return Ok(false);
+                    }
+                }
+            } else {
+                // 有効期限が設定されていない有料プランは無効
+                return Ok(false);
+            }
+        }
+    }
+
+    Ok(false) // デフォルトは無料
+}
+
 // 認証状態をチェックするヘルパー関数
 fn is_user_authenticated(app_handle: &tauri::AppHandle) -> bool {
     let store = match app_handle.store("auth.json") {
@@ -430,8 +489,16 @@ async fn convert_text(
     type_: &str,
     app_handle: tauri::AppHandle,
 ) -> Result<String, String> {
-    // 認証済みユーザーは制限をスキップ
-    if !is_user_authenticated(&app_handle) {
+    // プレミアム会員は制限をスキップ
+    let is_premium = match check_premium_membership(&app_handle).await {
+        Ok(is_premium) => is_premium,
+        Err(e) => {
+            println!("会員ステータスチェックでエラー: {}。無料として処理します。", e);
+            false
+        }
+    };
+
+    if !is_premium {
         // 利用回数制限のためのストア取得
         let store = app_handle.store("usage.json").map_err(|e| {
             serde_json::json!({"type": "store_error", "message": e.to_string()}).to_string()
