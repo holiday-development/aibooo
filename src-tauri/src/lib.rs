@@ -502,8 +502,14 @@ async fn check_premium_membership(app_handle: &tauri::AppHandle) -> Result<bool,
             .unwrap()
             .as_millis() as u64;
 
-        if now >= expires_at {
-            println!("アクセストークンが期限切れです。リフレッシュを試行します。");
+        // トークンが期限切れか、もしくは5分以内に期限切れになる場合にリフレッシュ
+        let refresh_threshold = expires_at - (5 * 60 * 1000); // 5分前
+        if now >= refresh_threshold {
+            if now >= expires_at {
+                println!("アクセストークンが期限切れです。リフレッシュを試行します。");
+            } else {
+                println!("アクセストークンが間もなく期限切れです。プリエンプティブリフレッシュを実行します。");
+            }
 
             // リフレッシュトークンを取得
             if let Some(refresh_token) = auth_data.get("refresh_token").and_then(|v| v.as_str()) {
@@ -828,6 +834,69 @@ fn setup_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+// デバッグ用: ストレージの状態をすべて出力
+#[tauri::command]
+async fn debug_storage_state(app_handle: AppHandle) -> Result<String, String> {
+    let mut debug_info = String::new();
+    
+    debug_info.push_str("=== STORAGE DEBUG INFO ===\n");
+    
+    // usage.json の内容を確認
+    if let Ok(store) = app_handle.store("usage.json") {
+        debug_info.push_str("\n--- usage.json content ---\n");
+        
+        // subscription データ
+        if let Some(sub_value) = store.get("subscription") {
+            debug_info.push_str(&format!("subscription: {}\n", sub_value));
+        } else {
+            debug_info.push_str("subscription: NOT FOUND\n");
+        }
+        
+        // その他のキー
+        debug_info.push_str("other keys in usage.json:\n");
+        // Note: Tauriのstoreは全キーを列挙する直接的な方法がないため、よく使われるキーをチェック
+        let common_keys = ["request_count", "convert_type", "login_completed", "next_screen_after_login"];
+        for key in common_keys {
+            if let Some(value) = store.get(key) {
+                debug_info.push_str(&format!("{}: {}\n", key, value));
+            }
+        }
+    } else {
+        debug_info.push_str("ERROR: Cannot access usage.json store\n");
+    }
+    
+    // auth.json の内容を確認
+    if let Ok(store) = app_handle.store("auth.json") {
+        debug_info.push_str("\n--- auth.json content ---\n");
+        
+        if let Some(auth_value) = store.get("auth") {
+            debug_info.push_str(&format!("auth: {}\n", auth_value));
+        } else {
+            debug_info.push_str("auth: NOT FOUND\n");
+        }
+        
+        if let Some(pending_email) = store.get("pending_email") {
+            debug_info.push_str(&format!("pending_email: {}\n", pending_email));
+        }
+    } else {
+        debug_info.push_str("ERROR: Cannot access auth.json store\n");
+    }
+    
+    debug_info.push_str("\n=== END DEBUG INFO ===\n");
+    
+    println!("{}", debug_info);
+    Ok(debug_info)
+}
+
+// テスト用: プレミアムプランを手動設定
+#[tauri::command]
+async fn test_set_premium(app_handle: AppHandle, plan_type: String) -> Result<SubscriptionStatus, String> {
+    println!("=== テスト用プレミアム設定開始 ===");
+    println!("設定するプラン: {}", plan_type);
+    
+    update_subscription(app_handle, plan_type, "test_customer_id".to_string(), Some("test_verification".to_string())).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     println!("アプリケーション起動");
@@ -842,7 +911,7 @@ pub fn run() {
             println!("セットアップ完了");
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![convert_text, process_clipboard, register_user, verify_email, login_user, verify_email_and_login, get_user_subscription_from_cognito, update_user_subscription_in_cognito, get_subscription_status, update_subscription, reset_subscription, check_subscription_validity, get_stripe_config, create_checkout_session])
+        .invoke_handler(tauri::generate_handler![convert_text, process_clipboard, register_user, verify_email, login_user, verify_email_and_login, get_user_subscription_from_cognito, update_user_subscription_in_cognito, get_subscription_status, update_subscription, reset_subscription, check_subscription_validity, get_stripe_config, create_checkout_session, debug_storage_state, test_set_premium])
         .on_window_event(|window, event| {
             use tauri::WindowEvent;
             if let WindowEvent::CloseRequested { api, .. } = event {

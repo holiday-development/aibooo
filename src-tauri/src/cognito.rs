@@ -268,6 +268,7 @@ impl CognitoService {
         let expires_in = auth_result.expires_in();
 
         println!("Sign in successful");
+        println!("Access token expires in: {} seconds", expires_in.unwrap_or(3600));
 
         Ok(SignInResponse {
             access_token,

@@ -9,6 +9,7 @@ import { Check, Crown, ArrowLeft, CreditCard, AlertTriangle } from 'lucide-react
 import { toast } from 'sonner';
 import { createCheckoutSession, getPriceId } from '@/lib/stripe';
 import { getSubscriptionFromCognito } from '@/lib/subscription';
+import { invoke } from '@tauri-apps/api/core';
 
 export function Subscription() {
   const [selectedPlan, setSelectedPlan] = useState<PlanType | null>(null);
@@ -220,7 +221,45 @@ export function Subscription() {
           </div>
         </div>
 
-                {/* プラン比較 */}
+                {/* デバッグ用ツール */}
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <h3 className="text-sm font-medium text-red-800 mb-2">🔧 デバッグ用ツール</h3>
+          <div className="flex gap-2 flex-wrap">
+            <Button size="sm" variant="outline" onClick={async () => {
+              try {
+                const result = await invoke('debug_storage_state');
+                console.log('ストレージ状態:', result);
+                toast.success('ストレージ状態をコンソールに出力しました');
+              } catch (error) {
+                console.error('ストレージ確認エラー:', error);
+                toast.error('ストレージ確認に失敗');
+              }
+            }}>
+              ストレージ確認
+            </Button>
+            <Button size="sm" variant="outline" onClick={async () => {
+              try {
+                const result = await invoke('test_set_premium', { planType: 'weekly' });
+                console.log('テスト設定結果:', result);
+                toast.success('Weeklyプレミアム設定完了');
+                await refreshSubscription();
+              } catch (error) {
+                console.error('テスト設定エラー:', error);
+                toast.error('テスト設定に失敗');
+              }
+            }}>
+              テストプレミアム設定
+            </Button>
+            <Button size="sm" variant="outline" onClick={async () => {
+              await refreshSubscription();
+              toast.success('サブスクリプション状態をリフレッシュしました');
+            }}>
+              状態リフレッシュ
+            </Button>
+          </div>
+        </div>
+
+        {/* プラン比較 */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           {SUBSCRIPTION_PLANS.map((plan) => {
             const isSelected = selectedPlan === plan.id; const isCurrentPlan = subscription?.plan_type === plan.id && isActive; return ( <Card
