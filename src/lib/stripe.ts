@@ -147,22 +147,6 @@ export async function createCheckoutSession(data: CreateCheckoutSessionData): Pr
 
 // プランタイプからStripe Price IDを取得
 export async function getPriceId(planType: PlanType): Promise<string> {
-<<<<<<< HEAD
-  console.log('getPriceId関数が呼び出されました。プランタイプ:', planType);
-
-  // Tauri環境の詳細デバッグ
-  console.log('=== Tauri環境デバッグ ===');
-  console.log('User Agent:', navigator.userAgent);
-  console.log('Location:', window.location);
-  console.log('Window object keys:', Object.keys(window));
-  console.log('window.__TAURI__ exists:', '__TAURI__' in window);
-  console.log('window.__TAURI__ type:', typeof (window as any).__TAURI__);
-  console.log('window.__TAURI__ value:', (window as any).__TAURI__);
-  console.log('window.__TAURI_INTERNALS__ exists:', '__TAURI_INTERNALS__' in window);
-  console.log('========================');
-
-=======
->>>>>>> feature/cognito-custom-attrs
   if (planType === 'free') {
     throw new Error('Free plan does not have a price ID');
   }
