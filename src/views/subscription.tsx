@@ -24,18 +24,18 @@ export function Subscription() {
   // Cognitoから最新のサブスクリプション状態を取得
   const refreshFromCognito = async (showSuccessMessage = false) => {
     if (!tokens?.access_token) return;
-    
+
     try {
       setIsRefreshing(true);
       console.log('Cognitoからサブスクリプション状態を更新中...');
-      
+
       // Cognitoから最新のサブスクリプション情報を取得
       const cognitoSubscription = await getSubscriptionFromCognito(tokens.access_token);
       console.log('Cognito subscription data:', cognitoSubscription);
-      
+
       // ローカルサブスクリプション状態を更新
       await refreshSubscription();
-      
+
       if (showSuccessMessage) {
         toast.success('プラン情報を更新しました');
       }

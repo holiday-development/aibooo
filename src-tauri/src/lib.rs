@@ -532,14 +532,42 @@ async fn convert_text(
     type_: &str,
     app_handle: tauri::AppHandle,
 ) -> Result<String, String> {
-    // プレミアム会員は制限をスキップ
-    let is_premium = match check_premium_membership(&app_handle).await {
-        Ok(is_premium) => is_premium,
-        Err(e) => {
-            println!("会員ステータスチェックでエラー: {}。無料として処理します。", e);
-            false
+    // 2段階プレミアム判定: 1.ローカル優先 → 2.Cognito確認
+    let mut is_premium = false;
+    
+    // 第1段階: ローカルストアの有効なプレミアムプランをチェック
+    match check_premium_membership_local(&app_handle) {
+        Ok(local_premium) => {
+            if local_premium {
+                is_premium = true;
+                println!("決済完了後: ローカルストアによるプレミアム判定成功");
+            } else {
+                // 第2段階: ローカルが無効ならCognitoから確認
+                println!("ローカルストア無効、Cognitoから会員ステータス確認中...");
+                match check_premium_membership(&app_handle).await {
+                    Ok(cognito_premium) => {
+                        is_premium = cognito_premium;
+                        if cognito_premium {
+                            println!("Cognitoによるプレミアム判定成功");
+                        } else {
+                            println!("Cognitoでもプレミアムプランなし、無料として処理");
+                        }
+                    }
+                    Err(e) => {
+                        println!("Cognito会員ステータスチェックでエラー: {}。無料として処理します。", e);
+                    }
+                }
+            }
         }
-    };
+        Err(e) => {
+            println!("ローカル会員ステータスチェックでエラー: {}。Cognitoを確認します。", e);
+            // ローカル確認失敗時もCognitoをフォールバック
+            match check_premium_membership(&app_handle).await {
+                Ok(cognito_premium) => is_premium = cognito_premium,
+                Err(e) => println!("全ての会員ステータスチェックが失敗: {}。無料として処理します。", e),
+            }
+        }
+    }
 
     if !is_premium {
         // 利用回数制限のためのストア取得
