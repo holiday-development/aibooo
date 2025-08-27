@@ -1,4 +1,4 @@
-import { SubscriptionInfo, PlanType, SUBSCRIPTION_PLANS } from '@/types/subscription';
+import { SubscriptionInfo, PlanType, MembershipStatus, SUBSCRIPTION_PLANS } from '@/types/subscription';
 import { invoke } from '@tauri-apps/api/core';
 
 // Cognitoとの連携用の型定義
@@ -64,6 +64,29 @@ export function calculateExpiryDate(planType: PlanType, fromDate?: Date): string
   expiryDate.setDate(expiryDate.getDate() + plan.duration);
 
   return expiryDate.toISOString();
+}
+
+/**
+ * 会員ステータスが有料会員かどうかを判定
+ */
+export function isPremiumMember(membershipStatus?: MembershipStatus | string | null): boolean {
+  if (!membershipStatus) return false;
+  return membershipStatus === 'premium' || membershipStatus === 'business';
+}
+
+/**
+ * プランタイプから会員ステータスを決定
+ */
+export function planTypeToMembershipStatus(planType: PlanType): MembershipStatus {
+  switch (planType) {
+    case 'free':
+      return 'free';
+    case 'weekly':
+    case 'monthly':
+      return 'premium';
+    default:
+      return 'free';
+  }
 }
 
 /**

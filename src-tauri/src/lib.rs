@@ -20,10 +20,48 @@ const STRIPE_SECRET_KEY: &str = dotenv!("STRIPE_SECRET_KEY");
 const STRIPE_PRICE_WEEKLY: &str = dotenv!("STRIPE_PRICE_WEEKLY");
 const STRIPE_PRICE_MONTHLY: &str = dotenv!("STRIPE_PRICE_MONTHLY");
 
+// 会員ステータス列挙型
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum MembershipStatus {
+    Free,
+    Premium,
+    Business,
+}
+
+impl Default for MembershipStatus {
+    fn default() -> Self {
+        MembershipStatus::Free
+    }
+}
+
+impl std::fmt::Display for MembershipStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MembershipStatus::Free => write!(f, "free"),
+            MembershipStatus::Premium => write!(f, "premium"),
+            MembershipStatus::Business => write!(f, "business"),
+        }
+    }
+}
+
+impl std::str::FromStr for MembershipStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "free" => Ok(MembershipStatus::Free),
+            "premium" => Ok(MembershipStatus::Premium),
+            "business" => Ok(MembershipStatus::Business),
+            _ => Err(format!("Unknown membership status: {}", s)),
+        }
+    }
+}
+
 // サブスクリプション関連の構造体
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct SubscriptionInfo {
     plan_type: String,
+    membership_status: Option<String>,
     expires_at: Option<String>,
     stripe_customer_id: Option<String>,
     verification_token: Option<String>,
@@ -34,6 +72,7 @@ impl Default for SubscriptionInfo {
     fn default() -> Self {
         Self {
             plan_type: "free".to_string(),
+            membership_status: Some("free".to_string()),
             expires_at: None,
             stripe_customer_id: None,
             verification_token: None,
