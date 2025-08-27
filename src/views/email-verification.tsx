@@ -78,8 +78,6 @@ export function EmailVerification() {
         }
       });
 
-      console.log('Email verification and login successful:', authResult);
-
       // 認証トークンを保存
       if (authResult.access_token && authResult.id_token && authResult.refresh_token) {
         const expiresAt = Date.now() + (authResult.expires_in * 1000);

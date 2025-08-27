@@ -47,6 +47,7 @@ pub struct ConfirmSignUpResponse {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UserAttributesResponse {
     pub email: String,
+    pub membership_status: Option<String>,
     pub subscription_plan: Option<String>,
     pub subscription_expires_at: Option<String>,
 }
@@ -309,6 +310,7 @@ impl CognitoService {
             })?;
 
         let mut email = String::new();
+        let mut membership_status: Option<String> = None;
         let mut subscription_plan: Option<String> = None;
         let mut subscription_expires_at: Option<String> = None;
 
@@ -317,6 +319,9 @@ impl CognitoService {
                 match attr.name() {
                     Some("email") => {
                         email = attr.value().unwrap_or_default().to_string();
+                    }
+                    Some("custom:membership_status") => {
+                        membership_status = attr.value().map(|v| v.to_string());
                     }
                     Some("custom:subscription_plan") => {
                         subscription_plan = attr.value().map(|v| v.to_string());
@@ -331,6 +336,7 @@ impl CognitoService {
 
         Ok(UserAttributesResponse {
             email,
+            membership_status,
             subscription_plan,
             subscription_expires_at,
         })
@@ -340,12 +346,22 @@ impl CognitoService {
     pub async fn update_user_attributes(
         &self,
         access_token: &str,
+        membership_status: Option<&str>,
         subscription_plan: Option<&str>,
         subscription_expires_at: Option<&str>
     ) -> Result<UpdateAttributesResponse, CognitoError> {
         println!("Updating user attributes...");
 
         let mut attributes = Vec::new();
+
+        if let Some(status) = membership_status {
+            attributes.push(
+                AttributeType::builder()
+                    .name("custom:membership_status")
+                    .value(status)
+                    .build()
+            );
+        }
 
         if let Some(plan) = subscription_plan {
             attributes.push(

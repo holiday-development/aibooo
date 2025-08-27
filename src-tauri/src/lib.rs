@@ -496,6 +496,7 @@ async fn update_user_subscription_in_cognito(
 
     cognito_service.update_user_attributes(
         &access_token,
+        None, // membership_status - この関数では更新しない
         subscription_plan.as_deref(),
         subscription_expires_at.as_deref()
     ).await
