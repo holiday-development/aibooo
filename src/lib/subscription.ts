@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 // Cognitoとの連携用の型定義
 interface CognitoUserAttributes {
   email: string;
+  membership_status: string | null;
   subscription_plan: string | null;
   subscription_expires_at: string | null;
 }
