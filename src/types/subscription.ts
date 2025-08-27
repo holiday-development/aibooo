@@ -1,7 +1,11 @@
 export type PlanType = 'free' | 'weekly' | 'monthly';
 
+// 会員ステータス型
+export type MembershipStatus = 'free' | 'premium' | 'business';
+
 export interface SubscriptionInfo {
   plan_type: PlanType;
+  membership_status?: MembershipStatus; // 会員ステータス
   expires_at: string | null; // ISO 8601 format
   stripe_customer_id: string | null;
   verification_token: string | null;
@@ -45,6 +49,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
 
 export const DEFAULT_SUBSCRIPTION: SubscriptionInfo = {
   plan_type: 'free',
+  membership_status: 'free',
   expires_at: null,
   stripe_customer_id: null,
   verification_token: null,
