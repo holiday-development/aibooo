@@ -425,6 +425,14 @@ async fn check_premium_membership_with_token(access_token: &str) -> Result<bool,
         }
     };
 
+    // デバッグ: Cognito属性の内容を詳細表示
+    println!("=== Cognito属性詳細デバッグ ===");
+    println!("email: {}", user_attrs.email);
+    println!("membership_status: {:?}", user_attrs.membership_status);
+    println!("subscription_plan: {:?}", user_attrs.subscription_plan);
+    println!("subscription_expires_at: {:?}", user_attrs.subscription_expires_at);
+    println!("=== Cognito属性デバッグ終了 ===");
+
     // membership_statusをチェック
     if let Some(membership_status) = user_attrs.membership_status {
         if membership_status == "premium" || membership_status == "business" {
@@ -454,15 +462,31 @@ async fn check_premium_membership_with_token(access_token: &str) -> Result<bool,
 fn check_premium_membership_local(app_handle: &tauri::AppHandle) -> Result<bool, String> {
     let subscription = match get_subscription_from_store(app_handle) {
         Ok(sub) => sub,
-        Err(_) => return Ok(false),
+        Err(e) => {
+            println!("ローカルストア取得エラー: {}", e);
+            return Ok(false);
+        }
     };
 
+    // デバッグ: ローカルストアの内容を詳細表示
+    println!("=== ローカルストア詳細デバッグ ===");
+    println!("plan_type: {}", subscription.plan_type);
+    println!("membership_status: {:?}", subscription.membership_status);
+    println!("expires_at: {:?}", subscription.expires_at);
+    println!("purchased_at: {:?}", subscription.purchased_at);
+    println!("stripe_customer_id: {:?}", subscription.stripe_customer_id);
+    
+    let is_active = is_subscription_active(&subscription);
+    println!("is_subscription_active: {}", is_active);
+    println!("=== ローカルストアデバッグ終了 ===");
+
     // ローカルストアに有効なプレミアムプランがあるかチェック
-    if subscription.plan_type != "free" && is_subscription_active(&subscription) {
+    if subscription.plan_type != "free" && is_active {
         println!("ローカルストアに有効なプレミアムプランあり: {}", subscription.plan_type);
         return Ok(true);
     }
 
+    println!("ローカルストアに有効なプレミアムプランなし");
     Ok(false)
 }
 
@@ -702,6 +726,15 @@ async fn update_user_subscription_in_cognito(
     .map_err(|e| format!("ユーザー属性の更新に失敗しました: {}", e))
 }
 
+// テスト用: プレミアムプランを手動設定
+#[tauri::command]
+async fn test_set_premium(app_handle: AppHandle, plan_type: String) -> Result<SubscriptionStatus, String> {
+    println!("=== テスト用プレミアム設定開始 ===");
+    println!("設定するプラン: {}", plan_type);
+    
+    update_subscription(app_handle, plan_type, "test_customer_id".to_string(), Some("test_verification".to_string())).await
+}
+
 // JSからの呼び出し用のエントリーポイント
 #[tauri::command]
 async fn process_clipboard(app_handle: AppHandle) -> Result<(String, String), String> {
@@ -827,7 +860,7 @@ pub fn run() {
             println!("セットアップ完了");
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![convert_text, process_clipboard, register_user, verify_email, login_user, verify_email_and_login, get_user_subscription_from_cognito, update_user_subscription_in_cognito, get_subscription_status, update_subscription, reset_subscription, check_subscription_validity, get_stripe_config, create_checkout_session])
+        .invoke_handler(tauri::generate_handler![convert_text, process_clipboard, register_user, verify_email, login_user, verify_email_and_login, get_user_subscription_from_cognito, update_user_subscription_in_cognito, get_subscription_status, update_subscription, reset_subscription, check_subscription_validity, get_stripe_config, create_checkout_session, test_set_premium])
         .on_window_event(|window, event| {
             use tauri::WindowEvent;
             if let WindowEvent::CloseRequested { api, .. } = event {

@@ -9,6 +9,7 @@ import { Check, Crown, ArrowLeft, CreditCard, AlertTriangle } from 'lucide-react
 import { toast } from 'sonner';
 import { createCheckoutSession, getPriceId } from '@/lib/stripe';
 import { getSubscriptionFromCognito } from '@/lib/subscription';
+import { invoke } from '@tauri-apps/api/core';
 
 export function Subscription() {
   const [selectedPlan, setSelectedPlan] = useState<PlanType | null>(null);
@@ -53,6 +54,20 @@ export function Subscription() {
       refreshFromCognito();
     }
   }, [tokens?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // デバッグ用: テストプレミアム設定
+  const handleTestPremium = async (planType: PlanType) => {
+    try {
+      console.log('テスト用プレミアム設定開始:', planType);
+      const result = await invoke('test_set_premium', { planType });
+      console.log('テスト用プレミアム設定結果:', result);
+      toast.success(`テスト用${planType}プランを設定しました`);
+      await refreshSubscription();
+    } catch (error) {
+      console.error('テスト用プレミアム設定失敗:', error);
+      toast.error('テスト用プレミアム設定に失敗しました');
+    }
+  };
 
   const handlePlanSelect = (planType: PlanType) => {
     setSelectedPlan(planType);
@@ -133,6 +148,19 @@ export function Subscription() {
           <div>
             <h1 className="text-3xl font-bold">プレミアムプラン</h1>
             <p className="text-muted-foreground">無制限でAIboooを利用しましょう</p>
+          </div>
+        </div>
+
+        {/* デバッグ用テストボタン */}
+        <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <h3 className="text-sm font-medium text-yellow-800 mb-2">🔧 デバッグ用テスト機能</h3>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => handleTestPremium('weekly')}>
+              週間プラン設定
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => handleTestPremium('monthly')}>
+              月間プラン設定  
+            </Button>
           </div>
         </div>
 
