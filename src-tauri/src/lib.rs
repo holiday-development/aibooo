@@ -450,6 +450,22 @@ async fn check_premium_membership_with_token(access_token: &str) -> Result<bool,
     Ok(false) // デフォルトは無料
 }
 
+// ローカルストアからプレミアム判定するヘルパー関数
+fn check_premium_membership_local(app_handle: &tauri::AppHandle) -> Result<bool, String> {
+    let subscription = match get_subscription_from_store(app_handle) {
+        Ok(sub) => sub,
+        Err(_) => return Ok(false),
+    };
+
+    // ローカルストアに有効なプレミアムプランがあるかチェック
+    if subscription.plan_type != "free" && is_subscription_active(&subscription) {
+        println!("ローカルストアに有効なプレミアムプランあり: {}", subscription.plan_type);
+        return Ok(true);
+    }
+
+    Ok(false)
+}
+
 // プレミアム会員かどうかをチェックする関数
 async fn check_premium_membership(app_handle: &tauri::AppHandle) -> Result<bool, String> {
     let store = app_handle.store("auth.json").map_err(|e| {
@@ -534,7 +550,7 @@ async fn convert_text(
 ) -> Result<String, String> {
     // 2段階プレミアム判定: 1.ローカル優先 → 2.Cognito確認
     let mut is_premium = false;
-    
+
     // 第1段階: ローカルストアの有効なプレミアムプランをチェック
     match check_premium_membership_local(&app_handle) {
         Ok(local_premium) => {
