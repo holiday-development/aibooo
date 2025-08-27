@@ -62,23 +62,23 @@ export function Subscription() {
         const hash = window.location.hash;
         if (hash.includes('payment-success')) {
           console.log('決済完了を検知しました');
-          
+
           // URLハッシュからプラン情報を取得
           const urlParams = new URLSearchParams(hash.substring(1));
           const planType = urlParams.get('plan') as PlanType;
           const sessionId = urlParams.get('session_id');
-          
+
           if (planType && sessionId) {
             console.log('決済完了処理開始:', { planType, sessionId });
-            
+
             // update_subscriptionを実行
             try {
               await _updatePlan(planType, sessionId);
               toast.success(`${planType}プランの決済が完了しました！`);
-              
+
               // ハッシュをクリア
               window.location.hash = '';
-              
+
               // サブスクリプション状態を更新
               await refreshSubscription();
             } catch (error) {
@@ -87,24 +87,24 @@ export function Subscription() {
             }
           }
         }
-        
+
         // LocalStorageからの決済完了フラグもチェック
         const paymentCompleted = localStorage.getItem('stripe_payment_completed');
         const completedPlan = localStorage.getItem('stripe_completed_plan');
         const completedCustomerId = localStorage.getItem('stripe_customer_id');
-        
+
         if (paymentCompleted === 'true' && completedPlan && completedCustomerId) {
           console.log('localStorage決済完了を検知:', { completedPlan, completedCustomerId });
-          
+
           try {
             await _updatePlan(completedPlan as PlanType, completedCustomerId);
             toast.success(`${completedPlan}プランの決済が完了しました！`);
-            
+
             // LocalStorageをクリア
             localStorage.removeItem('stripe_payment_completed');
             localStorage.removeItem('stripe_completed_plan');
             localStorage.removeItem('stripe_customer_id');
-            
+
             await refreshSubscription();
           } catch (error) {
             console.error('決済完了処理エラー:', error);
@@ -118,14 +118,14 @@ export function Subscription() {
 
     // 画面表示時に決済完了をチェック
     checkPaymentCompletion();
-    
+
     // hashchange イベントで決済完了を監視
     const handleHashChange = () => {
       checkPaymentCompletion();
     };
-    
+
     window.addEventListener('hashchange', handleHashChange);
-    
+
     return () => {
       window.removeEventListener('hashchange', handleHashChange);
     };
@@ -146,7 +146,7 @@ export function Subscription() {
 
       // 決済情報をLocalStorageに保存（決済完了時の検知用）
       localStorage.setItem('stripe_pending_plan', planType);
-      
+
       // Stripe Checkout セッションを作成
       const checkoutResult = await createCheckoutSession({
         priceId,
@@ -154,7 +154,7 @@ export function Subscription() {
         successUrl: window.location.origin + '/#payment-success?plan=' + planType,
         cancelUrl: window.location.origin + '/#payment-cancel'
       });
-      
+
       console.log('Stripe Checkout セッション作成完了:', checkoutResult);
 
       // createCheckoutSession内でredirectToCheckoutが実行されるため、

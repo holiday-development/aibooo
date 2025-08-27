@@ -143,7 +143,7 @@ fn save_subscription_to_store(app_handle: &AppHandle, subscription: &Subscriptio
     Ok(())
 }
 
-// サブスクリプションが有効かチェック
+// サブスクリプションが有効かチェック（グレースピリオド付き）
 fn is_subscription_active(subscription: &SubscriptionInfo) -> bool {
     if subscription.plan_type == "free" {
         return false;
@@ -152,8 +152,15 @@ fn is_subscription_active(subscription: &SubscriptionInfo) -> bool {
     if let Some(expires_str) = &subscription.expires_at {
         if let Ok(expires_time) = DateTime::parse_from_rfc3339(expires_str) {
             let now = Utc::now();
-            return expires_time > now;
+            // 24時間のグレースピリオドを追加（決済処理のタイムラグを考慮）
+            let grace_period = chrono::Duration::hours(24);
+            return expires_time.with_timezone(&Utc) + grace_period > now;
         }
+    }
+
+    // 有効期限が設定されていない有料プランは有効とみなす（テスト用プランなど）
+    if subscription.plan_type != "free" {
+        return true;
     }
 
     false
@@ -246,15 +253,16 @@ async fn reset_subscription(app_handle: AppHandle) -> Result<SubscriptionStatus,
 async fn check_subscription_validity(app_handle: AppHandle) -> Result<SubscriptionStatus, String> {
     let subscription = get_subscription_from_store(&app_handle)?;
 
-    // 期限切れの場合は自動的にリセット
-    if !is_subscription_active(&subscription) && subscription.plan_type != "free" {
-        return reset_subscription(app_handle).await;
-    }
+    // 期限切れでも自動リセットはしない - 決済処理との競合を避けるため
+    // UI側で期限切れ表示を行い、ユーザーが明示的に更新する必要がある
 
     let plan_type = subscription.plan_type.clone();
     let expires_at = subscription.expires_at.clone();
     let is_active = is_subscription_active(&subscription);
     let days_remaining = get_days_remaining(&subscription);
+
+    // デバッグ情報出力
+    println!("有効性チェック - プラン: {}, 有効: {}, 残り日数: {}", plan_type, is_active, days_remaining);
 
     Ok(SubscriptionStatus {
         plan_type,

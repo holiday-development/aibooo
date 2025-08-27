@@ -110,14 +110,14 @@ export const SubscriptionProvider = ({ children }: { children: ReactNode }) => {
     const checkExpiry = () => {
       if (!subscription) return;
 
-      // 期限切れの場合（is_activeがfalseで無料プランでない場合）
+      // 期限切れの場合（is_activeがfalseで無料プランでない場合） - 自動リセットを削除
       if (!subscription.is_active && subscription.plan_type !== 'free') {
-        console.log('Subscription expired, resetting to free plan');
+        console.log('Subscription expired, but not auto-resetting to avoid conflicts');
         toast.error('プレミアムプランが期限切れになりました', {
-          description: '無料プランに戻りました。プレミアムプランを継続するには再度ご購入ください。',
+          description: '引き続きご利用いただくには、プレミアムプランを再度ご購入ください。',
           duration: 5000,
         });
-        checkValidity(); // 自動的にリセットされる
+        // checkValidity(); を削除 - 自動リセットを防ぐ
         return;
       }
 
@@ -137,7 +137,7 @@ export const SubscriptionProvider = ({ children }: { children: ReactNode }) => {
     const interval = setInterval(checkExpiry, 60 * 60 * 1000);
 
     return () => clearInterval(interval);
-  }, [subscription, checkValidity, isLoading]);
+  }, [subscription, isLoading]); // checkValidityを依存配列から削除
 
   return (
     <SubscriptionContext.Provider
